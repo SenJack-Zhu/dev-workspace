@@ -155,6 +155,30 @@ jobs:
           echo "--- package_config: $(ls .dart_tool/package_config.json 2>/dev/null && echo OK || echo MISSING) ---"
 
       # ------- 计算版本 + 构建 APK -------
+      - name: 🩹 Patch flutter_inappwebview_android ProGuard (fix deprecated proguard-android.txt)
+        working-directory: \${{ env.PROJECT_DIR }}
+        run: |
+          echo "Patching flutter_inappwebview_android build.gradle for ProGuard compatibility..."
+          TARGET_DIR="$PUB_CACHE/hosted/pub.dev"
+          FILE=$(find "$TARGET_DIR" -maxdepth 3 -path "*/flutter_inappwebview_android-*/android/build.gradle" 2>/dev/null | head -1)
+          if [ -z "$FILE" ]; then
+            echo "WARNING: flutter_inappwebview_android build.gradle NOT FOUND in PUB_CACHE, skipping patch"
+            ls "$TARGET_DIR" 2>/dev/null | grep -i inapp || true
+          else
+            echo "Found: $FILE"
+            echo "Before (line 40-48):"
+            sed -n '40,48p' "$FILE" || true
+            sed -i "s|getDefaultProguardFile('proguard-android.txt')|getDefaultProguardFile('proguard-android-optimize.txt')|g" "$FILE"
+            echo "After:"
+            sed -n '40,48p' "$FILE" || true
+            if grep -q "proguard-android.txt" "$FILE"; then
+              echo "ERROR: replace failed, old string still present!"
+              exit 1
+            else
+              echo "Patch applied successfully"
+            fi
+          fi
+
       - name: Build APK
         id: get_ver
         working-directory: ${{ env.PROJECT_DIR }}
