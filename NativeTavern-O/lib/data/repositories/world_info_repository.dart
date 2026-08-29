@@ -1,0 +1,564 @@
+import 'dart:convert';
+import 'package:drift/drift.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:native_tavern/data/database/database.dart' hide WorldInfo, WorldInfoEntry;
+import 'package:native_tavern/data/database/database.dart' as db;
+import 'package:native_tavern/data/models/world_info.dart' as models;
+import 'package:uuid/uuid.dart';
+
+/// Provider for WorldInfo repository
+final worldInfoRepositoryProvider = Provider<WorldInfoRepository>((ref) {
+  throw UnimplementedError('Must be overridden in ProviderScope');
+});
+
+/// Repository for managing world info / lorebook data
+class WorldInfoRepository {
+  final AppDatabase _db;
+  static const _uuid = Uuid();
+
+  WorldInfoRepository(this._db);
+
+  /// Get all world infos
+  Future<List<models.WorldInfo>> getAllWorldInfos() async {
+    final rows = await _db.select(_db.worldInfos).get();
+    
+    final worldInfos = <models.WorldInfo>[];
+    for (final row in rows) {
+      final entries = await getEntriesForWorldInfo(row.id);
+      worldInfos.add(_worldInfoFromRow(row, entries));
+    }
+    return worldInfos;
+  }
+
+  /// Loads only lorebook metadata for the management list. Entries are loaded
+  /// when the user opens a specific lorebook.
+  Future<List<models.WorldInfo>> getWorldInfoSummaries() async {
+    final rows = await _db.select(_db.worldInfos).get();
+    return rows
+        .map((row) => _worldInfoFromRow(row, const []))
+        .toList(growable: false);
+  }
+
+  /// Returns entry counts without materializing entry content.
+  Future<Map<String, int>> getWorldInfoEntryCounts() async {
+    final count = _db.worldInfoEntries.id.count();
+    final rows = await (_db.selectOnly(_db.worldInfoEntries)
+          ..addColumns([_db.worldInfoEntries.worldInfoId, count])
+          ..groupBy([_db.worldInfoEntries.worldInfoId]))
+        .get();
+    return {
+      for (final row in rows)
+        row.read(_db.worldInfoEntries.worldInfoId)!: row.read(count) ?? 0,
+    };
+  }
+
+  /// Get global world infos (not bound to a character)
+  Future<List<models.WorldInfo>> getGlobalWorldInfos() async {
+    final rows = await (_db.select(_db.worldInfos)
+          ..where((t) => t.isGlobal.equals(true)))
+        .get();
+    
+    final worldInfos = <models.WorldInfo>[];
+    for (final row in rows) {
+      final entries = await getEntriesForWorldInfo(row.id);
+      worldInfos.add(_worldInfoFromRow(row, entries));
+    }
+    return worldInfos;
+  }
+
+  /// Get world infos for a specific character
+  Future<List<models.WorldInfo>> getWorldInfosForCharacter(String characterId) async {
+    final rows = await (_db.select(_db.worldInfos)
+          ..where((t) => t.characterId.equals(characterId)))
+        .get();
+    
+    final worldInfos = <models.WorldInfo>[];
+    for (final row in rows) {
+      final entries = await getEntriesForWorldInfo(row.id);
+      worldInfos.add(_worldInfoFromRow(row, entries));
+    }
+    return worldInfos;
+  }
+
+  /// Get world info by ID
+  Future<models.WorldInfo?> getWorldInfoById(String id) async {
+    final row = await (_db.select(_db.worldInfos)
+          ..where((t) => t.id.equals(id)))
+        .getSingleOrNull();
+    
+    if (row == null) return null;
+    
+    final entries = await getEntriesForWorldInfo(id);
+    return _worldInfoFromRow(row, entries);
+  }
+
+  /// Create a new world info
+  Future<models.WorldInfo> createWorldInfo({
+    required String name,
+    String? description,
+    bool isGlobal = false,
+    String? characterId,
+    String? scanDepth,
+    bool? caseSensitive,
+    bool? matchWholeWords,
+    bool? useGroupScoring,
+    int? recursionDepth,
+    Map<String, dynamic>? extensions,
+  }) async {
+    final id = _uuid.v4();
+    final now = DateTime.now();
+    
+    final companion = WorldInfosCompanion(
+      id: Value(id),
+      name: Value(name),
+      description: Value(description),
+      enabled: const Value(true),
+      isGlobal: Value(isGlobal),
+      characterId: Value(characterId),
+      scanDepth: Value(scanDepth),
+      caseSensitive: Value(caseSensitive),
+      matchWholeWords: Value(matchWholeWords),
+      useGroupScoring: Value(useGroupScoring),
+      recursionDepth: Value(recursionDepth),
+      extensionsJson: Value(extensions != null ? jsonEncode(extensions) : '{}'),
+      createdAt: Value(now),
+      modifiedAt: Value(now),
+    );
+    
+    await _db.into(_db.worldInfos).insert(companion);
+    
+    return models.WorldInfo(
+      id: id,
+      name: name,
+      description: description,
+      entries: [],
+      enabled: true,
+      isGlobal: isGlobal,
+      characterId: characterId,
+      createdAt: now,
+      modifiedAt: now,
+    );
+  }
+
+  /// Update world info
+  Future<models.WorldInfo> updateWorldInfo(models.WorldInfo worldInfo) async {
+    final now = DateTime.now();
+    
+    await (_db.update(_db.worldInfos)..where((t) => t.id.equals(worldInfo.id)))
+        .write(
+      WorldInfosCompanion(
+        name: Value(worldInfo.name),
+        description: Value(worldInfo.description),
+        enabled: Value(worldInfo.enabled),
+        isGlobal: Value(worldInfo.isGlobal),
+        characterId: Value(worldInfo.characterId),
+        modifiedAt: Value(now),
+      ),
+    );
+    
+    return worldInfo.copyWith(modifiedAt: now);
+  }
+
+  /// Delete world info
+  Future<void> deleteWorldInfo(String id) async {
+    // Delete all entries first
+    await (_db.delete(_db.worldInfoEntries)
+          ..where((t) => t.worldInfoId.equals(id)))
+        .go();
+    // Delete the world info
+    await (_db.delete(_db.worldInfos)..where((t) => t.id.equals(id))).go();
+  }
+
+  /// Get entries for a world info
+  Future<List<models.WorldInfoEntry>> getEntriesForWorldInfo(String worldInfoId) async {
+    final rows = await (_db.select(_db.worldInfoEntries)
+          ..where((t) => t.worldInfoId.equals(worldInfoId))
+          ..orderBy([(t) => OrderingTerm.asc(t.insertionOrder)]))
+        .get();
+    return rows.map(_entryFromRow).toList();
+  }
+
+  /// Add entry to world info
+  Future<models.WorldInfoEntry> addEntry({
+    required String worldInfoId,
+    required List<String> keys,
+    required String content,
+    List<String>? secondaryKeys,
+    String? comment,
+    models.WorldInfoPosition? position,  // SillyTavern default is 0 (before)
+    bool? constant,
+    bool? selective,
+    int? insertionOrder,
+    int depth = 4,
+  }) async {
+    final id = _uuid.v4();
+    
+    // Get the next insertion order if not provided
+    final existingEntries = await getEntriesForWorldInfo(worldInfoId);
+    final actualInsertionOrder = insertionOrder ?? (existingEntries.isEmpty
+        ? 0
+        : existingEntries.map((e) => e.insertionOrder).reduce((a, b) => a > b ? a : b) + 1);
+    
+    final actualPosition = position ?? models.WorldInfoPosition.before;
+    // If no keys are provided, the entry is constant by default (always included)
+    // Otherwise, default to the provided constant value or false
+    final actualConstant = constant ?? (keys.isEmpty ? true : false);
+    final actualSelective = selective ?? (secondaryKeys?.isNotEmpty ?? false);
+    
+    final companion = WorldInfoEntriesCompanion(
+      id: Value(id),
+      worldInfoId: Value(worldInfoId),
+      keys: Value(jsonEncode(keys)),
+      secondaryKeys: Value(jsonEncode(secondaryKeys ?? [])),
+      content: Value(content),
+      comment: Value(comment ?? ''),
+      enabled: const Value(true),
+      constant: Value(actualConstant),
+      selective: Value(actualSelective),
+      insertionOrder: Value(actualInsertionOrder),
+      caseSensitive: const Value(false),
+      matchWholeWords: const Value(false),
+      useGroupScoring: const Value(false),
+      automationId: const Value(''),
+      probability: const Value(100),
+      position: Value(actualPosition.index),
+      depth: Value(depth),
+      groupWeight: const Value(100),
+      preventRecursion: const Value(false),
+      delayUntilRecursion: const Value(false),
+      scanDepth: const Value(1000),
+      extensionsJson: const Value('{}'),
+    );
+    
+    await _db.into(_db.worldInfoEntries).insert(companion);
+    
+    // Update world info modified time
+    await (_db.update(_db.worldInfos)
+          ..where((t) => t.id.equals(worldInfoId)))
+        .write(WorldInfosCompanion(modifiedAt: Value(DateTime.now())));
+    
+    return models.WorldInfoEntry(
+      id: id,
+      worldInfoId: worldInfoId,
+      keys: keys,
+      secondaryKeys: secondaryKeys ?? [],
+      content: content,
+      comment: comment ?? '',
+      enabled: true,
+      constant: actualConstant,
+      selective: actualSelective,
+      insertionOrder: actualInsertionOrder,
+      caseSensitive: false,
+      matchWholeWords: false,
+      probability: 100,
+      position: actualPosition,
+      depth: depth,
+      groupWeight: 100,
+      preventRecursion: false,
+      scanDepth: 1000,
+    );
+  }
+
+  /// Update entry
+  Future<models.WorldInfoEntry> updateEntry(models.WorldInfoEntry entry) async {
+    await (_db.update(_db.worldInfoEntries)
+          ..where((t) => t.id.equals(entry.id)))
+        .write(
+      WorldInfoEntriesCompanion(
+        keys: Value(jsonEncode(entry.keys)),
+        secondaryKeys: Value(jsonEncode(entry.secondaryKeys)),
+        content: Value(entry.content),
+        comment: Value(entry.comment),
+        enabled: Value(entry.enabled),
+        constant: Value(entry.constant),
+        selective: Value(entry.selective),
+        insertionOrder: Value(entry.insertionOrder),
+        caseSensitive: Value(entry.caseSensitive),
+        matchWholeWords: Value(entry.matchWholeWords),
+        useGroupScoring: Value(entry.useGroupScoring),
+        automationId: Value(entry.automationId ? 'true' : ''),
+        probability: Value(entry.probability),
+        position: Value(entry.position.index),
+        depth: Value(entry.depth),
+        group: Value(entry.group),
+        groupWeight: Value(entry.groupWeight),
+        preventRecursion: Value(entry.preventRecursion),
+        delayUntilRecursion: Value(entry.delayUntilRecursion),
+        scanDepth: Value(entry.scanDepth),
+        extensionsJson: Value(jsonEncode(entry.extensions)),
+      ),
+    );
+    
+    // Update world info modified time
+    await (_db.update(_db.worldInfos)
+          ..where((t) => t.id.equals(entry.worldInfoId)))
+        .write(WorldInfosCompanion(modifiedAt: Value(DateTime.now())));
+    
+    return entry;
+  }
+
+  /// Delete entry
+  Future<void> deleteEntry(String id) async {
+    await (_db.delete(_db.worldInfoEntries)..where((t) => t.id.equals(id)))
+        .go();
+  }
+
+  /// Find matching entries for given text
+  /// Note: This method finds entries that match keywords in the text.
+  /// Constant entries (entries with constant=true OR entries with no keys) are handled
+  /// separately in WorldInfoMatcher.findMatchingEntries() to ensure they're always included.
+  Future<List<models.WorldInfoEntry>> findMatchingEntries(
+    String text,
+    List<String> worldInfoIds,
+  ) async {
+    debugPrint('=== Repository.findMatchingEntries ===');
+    debugPrint('Searching in ${worldInfoIds.length} world infos');
+    debugPrint('Text length: ${text.length}');
+    
+    final matchingEntries = <models.WorldInfoEntry>[];
+    
+    for (final worldInfoId in worldInfoIds) {
+      final entries = await getEntriesForWorldInfo(worldInfoId);
+      debugPrint('World info $worldInfoId has ${entries.length} entries');
+      
+      for (final entry in entries) {
+        if (!entry.enabled) {
+          debugPrint('  Entry "${entry.comment.isNotEmpty ? entry.comment : entry.keys.join(", ")}" is disabled, skipping');
+          continue;
+        }
+        
+        // Entries with no keys are treated as constant (always included)
+        // They will be handled by WorldInfoMatcher, skip them here to avoid duplicates
+        if (entry.keys.isEmpty) {
+          debugPrint('  Entry "${entry.comment.isNotEmpty ? entry.comment : "(no keys)"}" has no keys, treating as constant');
+          continue;
+        }
+        
+        final textToSearch = entry.caseSensitive ? text : text.toLowerCase();
+        
+        bool keyMatched = false;
+        String matchedKey = '';
+        for (final key in entry.keys) {
+          // Skip empty keys
+          if (key.trim().isEmpty) continue;
+          
+          final searchKey = entry.caseSensitive ? key : key.toLowerCase();
+          
+          if (entry.matchWholeWords) {
+            final regex = RegExp(r'\b' + RegExp.escape(searchKey) + r'\b');
+            keyMatched = regex.hasMatch(textToSearch);
+          } else {
+            keyMatched = textToSearch.contains(searchKey);
+          }
+          
+          if (keyMatched) {
+            matchedKey = key;
+            break;
+          }
+        }
+        
+        if (!keyMatched) {
+          debugPrint('  Entry "${entry.comment.isNotEmpty ? entry.comment : entry.keys.join(", ")}" - no key match (keys: ${entry.keys})');
+          continue;
+        }
+        
+        debugPrint('  Entry "${entry.comment.isNotEmpty ? entry.comment : entry.keys.join(", ")}" - key "$matchedKey" matched!');
+        
+        // Check secondary keys if selective
+        if (entry.selective && entry.secondaryKeys.isNotEmpty) {
+          bool secondaryMatched = false;
+          for (final key in entry.secondaryKeys) {
+            final searchKey = entry.caseSensitive ? key : key.toLowerCase();
+            if (textToSearch.contains(searchKey)) {
+              secondaryMatched = true;
+              debugPrint('    Secondary key "$key" also matched');
+              break;
+            }
+          }
+          if (!secondaryMatched) {
+            debugPrint('    But no secondary key matched (selective mode), skipping');
+            continue;
+          }
+        }
+        
+        // Check probability
+        if (entry.probability < 100) {
+          final random = DateTime.now().millisecondsSinceEpoch % 100;
+          if (random >= entry.probability) {
+            debugPrint('    But probability check failed (${entry.probability}%), skipping');
+            continue;
+          }
+        }
+        
+        debugPrint('    -> ADDED to matches');
+        matchingEntries.add(entry);
+      }
+    }
+    
+    // Sort by insertion order
+    matchingEntries.sort((a, b) => a.insertionOrder.compareTo(b.insertionOrder));
+    
+    debugPrint('Total matches: ${matchingEntries.length}');
+    debugPrint('=== End Repository.findMatchingEntries ===');
+    
+    return matchingEntries;
+  }
+
+  // Private helpers
+  
+  models.WorldInfo _worldInfoFromRow(db.WorldInfo row, List<models.WorldInfoEntry> entries) {
+    return models.WorldInfo(
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      entries: entries,
+      enabled: row.enabled,
+      isGlobal: row.isGlobal,
+      characterId: row.characterId,
+      createdAt: row.createdAt,
+      modifiedAt: row.modifiedAt,
+    );
+  }
+
+  models.WorldInfoEntry _entryFromRow(db.WorldInfoEntry row) {
+    return models.WorldInfoEntry(
+      id: row.id,
+      worldInfoId: row.worldInfoId,
+      keys: _parseJsonList(row.keys),
+      secondaryKeys: _parseJsonList(row.secondaryKeys),
+      content: row.content,
+      comment: row.comment,
+      enabled: row.enabled,
+      constant: row.constant,
+      selective: row.selective,
+      insertionOrder: row.insertionOrder,
+      caseSensitive: row.caseSensitive,
+      matchWholeWords: row.matchWholeWords,
+      useGroupScoring: row.useGroupScoring,
+      automationId: row.automationId.isNotEmpty,
+      probability: row.probability,
+      position: models.WorldInfoPosition.values[row.position],
+      depth: row.depth,
+      group: row.group,
+      groupWeight: row.groupWeight,
+      preventRecursion: row.preventRecursion,
+      delayUntilRecursion: row.delayUntilRecursion,
+      scanDepth: row.scanDepth,
+      extensions: _parseJsonMap(row.extensionsJson),
+    );
+  }
+
+  List<String> _parseJsonList(String json) {
+    try {
+      final list = jsonDecode(json) as List;
+      return list.cast<String>();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Map<String, dynamic> _parseJsonMap(String json) {
+    try {
+      return jsonDecode(json) as Map<String, dynamic>;
+    } catch (_) {
+      return {};
+    }
+  }
+
+  /// Load built-in world infos from assets
+  Future<void> loadBuiltInWorldInfos() async {
+    try {
+      final builtInWorldInfoFiles = [
+        'assets/world_info/mortal_cultivation.json',
+        'assets/world_info/marvel_universe.json',
+        'assets/world_info/zelda_legend.json',
+      ];
+
+      for (final assetPath in builtInWorldInfoFiles) {
+        try {
+          // Load JSON from assets
+          final jsonString = await rootBundle.loadString(assetPath);
+          final json = jsonDecode(jsonString) as Map<String, dynamic>;
+          final worldInfoId = json['id'] as String;
+          
+          // Check if already exists
+          final existing = await getWorldInfoById(worldInfoId);
+          if (existing != null) {
+            continue;
+          }
+
+          // Create world info
+          await _db.into(_db.worldInfos).insert(
+            WorldInfosCompanion(
+              id: Value(worldInfoId),
+              name: Value(json['name'] as String),
+              description: Value(json['description'] as String?),
+              enabled: Value(json['enabled'] as bool? ?? true),
+              isGlobal: Value(json['isGlobal'] as bool? ?? false),
+              characterId: Value(json['characterId'] as String?),
+              scanDepth: Value(json['scanDepth'] as String?),
+              caseSensitive: Value(json['caseSensitive'] as bool?),
+              matchWholeWords: Value(json['matchWholeWords'] as bool?),
+              useGroupScoring: Value(json['useGroupScoring'] as bool?),
+              recursionDepth: Value(json['recursionDepth'] as int?),
+              extensionsJson: Value(json['extensions'] != null ? jsonEncode(json['extensions']) : '{}'),
+              createdAt: Value(DateTime.parse(json['createdAt'] as String)),
+              modifiedAt: Value(DateTime.parse(json['modifiedAt'] as String)),
+            ),
+          );
+
+          // Create entries
+          final entries = json['entries'] as List<dynamic>? ?? [];
+          debugPrint('Loading ${entries.length} entries for ${json['name']}');
+          
+          for (final entryJson in entries) {
+            final entry = entryJson as Map<String, dynamic>;
+            debugPrint('  - Loading entry: ${entry['id']} with keys: ${entry['keys']}');
+            
+            try {
+              await _db.into(_db.worldInfoEntries).insert(
+                WorldInfoEntriesCompanion(
+                  id: Value(entry['id'] as String),
+                  worldInfoId: Value(worldInfoId),
+                  keys: Value(jsonEncode(entry['keys'] ?? [])),
+                  secondaryKeys: Value(jsonEncode(entry['secondaryKeys'] ?? [])),
+                  content: Value(entry['content'] as String? ?? ''),
+                  comment: Value(entry['comment'] as String? ?? ''),
+                  enabled: Value(entry['enabled'] as bool? ?? true),
+                  constant: Value(entry['constant'] as bool? ?? false),
+                  selective: Value(entry['selective'] as bool? ?? false),
+                  insertionOrder: Value(entry['insertionOrder'] as int? ?? 0),
+                  caseSensitive: Value(entry['caseSensitive'] as bool? ?? false),
+                  matchWholeWords: Value(entry['matchWholeWords'] as bool? ?? false),
+                  useGroupScoring: Value(entry['useGroupScoring'] as bool? ?? false),
+                  automationId: Value(entry['automationId'] as String? ?? ''),
+                  probability: Value(entry['probability'] as int? ?? 100),
+                  position: Value(entry['position'] as int? ?? 1),
+                  depth: Value(entry['depth'] as int? ?? 4),
+                  group: Value(entry['group'] as String?),
+                  groupWeight: Value(entry['groupWeight'] as int? ?? 100),
+                  preventRecursion: Value(entry['preventRecursion'] as bool? ?? false),
+                  delayUntilRecursion: Value(entry['delayUntilRecursion'] as bool? ?? false),
+                  scanDepth: Value(entry['scanDepth'] as int? ?? 1000),
+                  extensionsJson: Value(entry['extensions'] != null ? jsonEncode(entry['extensions']) : '{}'),
+                ),
+              );
+            } catch (entryError, entryStack) {
+              debugPrint('  ❌ Failed to insert entry ${entry['id']}: $entryError');
+              debugPrint('  Entry data: ${jsonEncode(entry)}');
+            }
+          }
+          
+          debugPrint('✅ Loaded built-in world info: ${json['name']} with ${entries.length} entries');
+        } catch (e, stackTrace) {
+          debugPrint('❌ Failed to load built-in world info from $assetPath: $e');
+          debugPrint('Stack trace: $stackTrace');
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to load built-in world infos: $e');
+    }
+  }
+}

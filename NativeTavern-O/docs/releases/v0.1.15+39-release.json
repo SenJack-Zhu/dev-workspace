@@ -1,0 +1,39 @@
+{
+  "version": "0.1.15",
+  "buildNumber": 39,
+  "commit": "4947217",
+  "artifacts": {
+    "iosIpa": {
+      "path": "release/NativeTavern_v0.1.15+39.ipa",
+      "sha256": "46dce456867a397e015f6d9b55af2e60e9749b47b8b2ac041839f23feeafbd16",
+      "appStoreConnectBuildId": "e99d1ce0-3129-42c6-a6ae-1dd76680d4fb",
+      "processingState": "VALID"
+    },
+    "androidAab": {
+      "path": "release/NativeTavern_v0.1.15+39_Android.aab",
+      "sha256": "234107c47fabd8a39312f3f98f6a8f2ba34e1519651f5c5d34723b3192f9c469",
+      "googlePlay": {
+        "track": "production",
+        "versionCode": 39,
+        "status": "completed"
+      }
+    },
+    "androidApk": {
+      "path": "release/NativeTavern_v0.1.15+39_Android.apk",
+      "sha256": "e7088be3c130ecc4594c4323ff07b89061452e21c9daf5c561648b01872605fe",
+      "publicUrl": "https://download.nativetavern.com/NativeTavern.apk",
+      "publicSha256": "e7088be3c130ecc4594c4323ff07b89061452e21c9daf5c561648b01872605fe"
+    }
+  },
+  "appleStore": {
+    "existingVersion": "1.2.13",
+    "existingVersionState": "PREPARE_FOR_SUBMISSION",
+    "buildAssociated": true,
+    "whatIsNewLocalizationCount": 17,
+    "androidMentionsInWhatsNew": false,
+    "reviewSubmission": "not submitted; optional contact fields were intentionally left unchanged"
+  },
+  "discord": {
+    "announcementPublished": false
+  }
+}

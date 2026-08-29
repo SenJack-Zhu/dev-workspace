@@ -1,0 +1,52 @@
+[
+  {
+    "candidates": [
+      {
+        "index": 0,
+        "content": {
+          "role": "model",
+          "parts": [
+            {
+              "thought": true,
+              "text": "Need both tools. "
+            },
+            {
+              "text": "Checking now."
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "candidates": [
+      {
+        "index": 0,
+        "content": {
+          "role": "model",
+          "parts": [
+            {
+              "functionCall": {
+                "id": "call_weather",
+                "name": "weather",
+                "args": {
+                  "city": "Singapore"
+                }
+              }
+            },
+            {
+              "functionCall": {
+                "id": "call_time",
+                "name": "time",
+                "args": {
+                  "zone": "Asia/Singapore"
+                }
+              }
+            }
+          ]
+        },
+        "finishReason": "STOP"
+      }
+    ]
+  }
+]

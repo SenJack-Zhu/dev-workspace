@@ -1,0 +1,131 @@
+{
+    "id": "builtin_guardian_universe",
+    "name": "Guardian Universe",
+    "description": "The Guardian Universe original world setting. Includes enhanced individuals, organizations, powers, locations, and key events. Perfect for creating superhero-themed roleplay stories.",
+    "enabled": false,
+    "isGlobal": false,
+    "entries": [
+        {
+            "id": "entry_001",
+            "worldInfoId": "builtin_guardian_universe",
+            "keys": [
+                "Guardians",
+                "Earth's Protectors"
+            ],
+            "content": "The Guardians are Earth's Protectors, a team of extraordinary enhanced individuals assembled to protect the world from threats too great for any single hero. Core members include: Techno Knight (Marcus Steel), Sentinel (Sarah Cross), Storm Caller (Kai Zhang), Titan (David Grant), Shadow (Elena Volkov), and Marksman (Alex Rivera). The team operates from Guardian Tower and later the Guardian Compound.",
+            "enabled": true,
+            "constant": false,
+            "position": 1,
+            "insertionOrder": 100,
+            "comment": "The Guardians team"
+        },
+        {
+            "id": "entry_002",
+            "worldInfoId": "builtin_guardian_universe",
+            "keys": [
+                "Cosmic Fragments",
+                "Universal Gauntlet"
+            ],
+            "content": "The Cosmic Fragments are six immensely powerful crystalline shards that control fundamental aspects of existence: Space (blue, Nexus Cube), Mind (yellow, Consciousness Scepter), Reality (red, Aether Wave), Power (purple, Cosmic Core), Time (green, Temporal Eye), and Soul (orange, requires sacrifice). When combined in the Universal Gauntlet, they grant the wielder god-like power to reshape reality itself.",
+            "enabled": true,
+            "constant": false,
+            "position": 1,
+            "insertionOrder": 90,
+            "comment": "Cosmic Fragments"
+        },
+        {
+            "id": "entry_003",
+            "worldInfoId": "builtin_guardian_universe",
+            "keys": [
+                "GDI",
+                "Global Defense Initiative"
+            ],
+            "content": "GDI (Global Defense Initiative) is a covert international law enforcement and counter-threat agency. Led by Director Chen (retired), GDI deals with enhanced individual threats and maintains global peace. The organization was infiltrated by Crimson Dawn and later reformed after its exposure. Key agents include Commander Park and Deputy Director Martinez.",
+            "enabled": true,
+            "constant": false,
+            "position": 1,
+            "insertionOrder": 80,
+            "comment": "GDI organization"
+        },
+        {
+            "id": "entry_004",
+            "worldInfoId": "builtin_guardian_universe",
+            "keys": [
+                "Quantum Realm",
+                "Dimensional Planes",
+                "Nexus Bridge"
+            ],
+            "content": "The Quantum Realm is one of the Dimensional Planes, home to energy-based beings. Accessible through the Nexus Bridge, the Quantum Realm is a dimension of pure energy and advanced quantum technology. Other planes include Earth (Material Realm), Shadow Dimension (darkness entities), and Ember Realm (fire beings). The Quantum Realm holds secrets to dimensional travel and energy manipulation.",
+            "enabled": true,
+            "constant": false,
+            "position": 1,
+            "insertionOrder": 70,
+            "comment": "Quantum Realm"
+        },
+        {
+            "id": "entry_005",
+            "worldInfoId": "builtin_guardian_universe",
+            "keys": [
+                "Nova City",
+                "Crystallium",
+                "Techno Knight"
+            ],
+            "content": "Nova City is a technologically advanced metropolis, hidden within a quantum shield. Rich in Crystallium (the most powerful energy source on Earth), Nova City developed incredible technology while maintaining sustainable living. Techno Knight (Marcus Steel) serves as both defender and innovator. Key locations include the Crystal Tower and Quantum Labs. Nova City opened its technology to the world after centuries of isolation.",
+            "enabled": true,
+            "constant": false,
+            "position": 1,
+            "insertionOrder": 60,
+            "comment": "Nova City"
+        },
+        {
+            "id": "entry_006",
+            "worldInfoId": "builtin_guardian_universe",
+            "keys": [
+                "Void Lord",
+                "Dark Conqueror"
+            ],
+            "content": "Void Lord, the Dark Conqueror, sought to balance the universe by reshaping reality to his vision. Obsessed with collecting the Cosmic Fragments, he successfully performed 'The Convergence' using the complete Universal Gauntlet. Void Lord was eventually defeated by the Guardians in the Battle for Earth. He believed his actions were necessary, aiming to create a perfect universe.",
+            "enabled": true,
+            "constant": false,
+            "position": 1,
+            "insertionOrder": 50,
+            "comment": "Void Lord antagonist"
+        },
+        {
+            "id": "entry_007",
+            "worldInfoId": "builtin_guardian_universe",
+            "keys": [
+                "Marcus Steel",
+                "Techno Knight"
+            ],
+            "secondaryKeys": [
+                "Quantum Reactor",
+                "Steel Industries"
+            ],
+            "content": "Marcus Steel is a genius inventor who became Techno Knight after a near-death experience. He created the Quantum Reactor to power his advanced armored suits. As CEO of Steel Industries, he transformed the company from weapons manufacturing to clean energy technology. Known for his innovation and determination, Marcus sacrificed himself to save the universe from Void Lord, wielding the Cosmic Fragments despite knowing it would be fatal.",
+            "enabled": true,
+            "constant": false,
+            "selective": true,
+            "position": 1,
+            "insertionOrder": 110,
+            "comment": "Techno Knight character"
+        },
+        {
+            "id": "entry_008",
+            "worldInfoId": "builtin_guardian_universe",
+            "keys": [
+                "Multiverse",
+                "Quantum Mage",
+                "Temporal Fragment"
+            ],
+            "content": "The Multiverse is an infinite collection of alternate realities and timelines. Quantum Mage (Dr. Stephen Chen), Master of the Mystic Arts, protects Earth from mystical and dimensional threats using the Temporal Fragment (Cosmic Fragment of Time) and ancient spells. The Sanctum Primaris in New York serves as a mystical fortress. Dimensional travel and time manipulation are possible but dangerous, potentially creating paradoxes or attracting entities like the Shadow King.",
+            "enabled": true,
+            "constant": false,
+            "position": 1,
+            "insertionOrder": 40,
+            "comment": "Multiverse and magic"
+        }
+    ],
+    "createdAt": "2026-01-10T07:50:00.000Z",
+    "modifiedAt": "2026-01-10T09:10:00.000Z"
+}

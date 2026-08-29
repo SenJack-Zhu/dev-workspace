@@ -1,0 +1,749 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:native_tavern/presentation/theme/app_theme.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+/// Widget that renders HTML content using a WebView for full CSS support
+///
+/// This widget uses flutter_inappwebview to render complex HTML content
+/// with full CSS support including flexbox, grid, shadows, transitions, etc.
+class HtmlWebViewWidget extends StatefulWidget {
+  final String htmlContent;
+  final Color backgroundColor;
+  final Color textColor;
+  final double? fontSize;
+  final VoidCallback? onLongPress;
+  /// Unique key to force rebuild when content changes significantly
+  final String? contentKey;
+
+  const HtmlWebViewWidget({
+    super.key,
+    required this.htmlContent,
+    this.backgroundColor = Colors.transparent,
+    this.textColor = AppTheme.textPrimary,
+    this.fontSize,
+    this.onLongPress,
+    this.contentKey,
+  });
+
+  @override
+  State<HtmlWebViewWidget> createState() => _HtmlWebViewWidgetState();
+}
+
+class _HtmlWebViewWidgetState extends State<HtmlWebViewWidget> {
+  double _contentHeight = 100; // Initial height - start smaller, will expand
+  final double _minHeight = 50; // Minimum height to prevent collapse
+  bool _isLoading = true;
+  bool _hasError = false;
+  String? _errorMessage;
+  InAppWebViewController? _webViewController;
+  int _heightUpdateCount = 0; // Track number of height updates
+  bool _imagesLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Auto-hide loading after timeout
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted && _isLoading) {
+        setState(() => _isLoading = false);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    debugPrint('🌐 WebView disposing');
+    // Clear the controller reference to prevent issues with disposed WebView
+    _webViewController = null;
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(HtmlWebViewWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Check if content has changed (important for swipe switching)
+    final contentChanged = widget.htmlContent != oldWidget.htmlContent;
+    // Check if contentKey has changed (e.g., streaming ended)
+    final keyChanged = widget.contentKey != oldWidget.contentKey && widget.contentKey != null;
+    
+    if (contentChanged || keyChanged) {
+      debugPrint('🌐 didUpdateWidget: contentChanged=$contentChanged, keyChanged=$keyChanged');
+      debugPrint('🌐 Old key: ${oldWidget.contentKey}, New key: ${widget.contentKey}');
+      _reloadContent();
+    }
+  }
+
+  /// Track if a reload is in progress to prevent multiple simultaneous reloads
+  bool _isReloading = false;
+  
+  void _reloadContent() async {
+    // Prevent multiple simultaneous reloads
+    if (_isReloading) {
+      debugPrint('🌐 Reload already in progress, skipping');
+      return;
+    }
+    
+    if (_webViewController != null && mounted) {
+      _isReloading = true;
+      debugPrint('🌐 Starting content reload');
+      
+      setState(() {
+        _isLoading = true;
+        _heightUpdateCount = 0;
+        _imagesLoaded = false;
+        // Reset content height to prevent showing stale height
+        _contentHeight = 100;
+      });
+      
+      try {
+        // Reload the WebView with updated content
+        await _webViewController!.loadData(
+          data: _buildHtml(),
+          mimeType: 'text/html',
+          encoding: 'utf-8',
+          baseUrl: WebUri('about:blank'),
+        );
+        debugPrint('🌐 Content reload completed');
+      } catch (e) {
+        debugPrint('🌐 Error reloading content: $e');
+        // If loading fails, we should still hide the loading indicator
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
+      } finally {
+        _isReloading = false;
+      }
+    } else {
+      debugPrint('🌐 Cannot reload: controller=${_webViewController != null}, mounted=$mounted');
+    }
+  }
+
+  /// Request height update from JavaScript
+  void _requestHeightUpdate() async {
+    if (_webViewController != null && mounted) {
+      try {
+        await _webViewController!.evaluateJavascript(source: 'sendHeight();');
+      } catch (e) {
+        debugPrint('🌐 Error requesting height update: $e');
+      }
+    }
+  }
+
+  /// Build the complete HTML document
+  String _buildHtml() {
+    final effectiveFontSize = widget.fontSize ?? 14.0;
+    final textColorHex = _colorToHex(widget.textColor);
+    final content = widget.htmlContent.replaceAllMapped(
+      RegExp(r'<details\b', caseSensitive: false),
+      (match) => '<details open',
+    );
+
+    return '''
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <style>
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background-color: transparent;
+      color: $textColorHex;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      font-size: ${effectiveFontSize}px;
+      line-height: 1.5;
+      width: 100%;
+      height: auto !important;
+      min-height: 0 !important;
+      max-height: none !important;
+      overflow: visible !important;
+      word-wrap: break-word;
+      overflow-wrap: anywhere;
+    }
+    #measure-root {
+      display: flow-root;
+      width: 100%;
+      padding: 8px;
+      height: auto !important;
+      max-height: none !important;
+      overflow: visible !important;
+    }
+    details, details[open], summary {
+      overflow: visible;
+    }
+    img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 8px;
+      display: block;
+      min-height: 50px;
+      background: linear-gradient(90deg, rgba(60,60,60,0.3) 25%, rgba(80,80,80,0.3) 50%, rgba(60,60,60,0.3) 75%);
+      background-size: 200% 100%;
+      animation: imageLoading 1.5s infinite;
+    }
+    img[data-loaded="true"] {
+      background: none;
+      animation: none;
+      min-height: auto;
+    }
+    @keyframes imageLoading {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+    a {
+      color: #7C4DFF;
+      text-decoration: underline;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 0.5em;
+      margin-bottom: 0.3em;
+      font-weight: bold;
+    }
+    h1 { font-size: 1.8em; }
+    h2 { font-size: 1.5em; }
+    h3 { font-size: 1.3em; }
+    h4 { font-size: 1.1em; }
+    p {
+      margin: 0 0 0.5em 0;
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255,255,255,0.2);
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body>
+<div id="measure-root">
+$content
+</div>
+<script>
+  var heightSent = false;
+  var lastSentHeight = 0;
+  var allImagesLoaded = false;
+  
+  function getContentHeight() {
+    var root = document.getElementById('measure-root') || document.body;
+    var rect = root.getBoundingClientRect();
+    return Math.ceil(Math.max(
+      rect.height || 0,
+      root.scrollHeight || 0,
+      root.offsetHeight || 0,
+      document.body.scrollHeight || 0,
+      document.body.offsetHeight || 0
+    ));
+  }
+  
+  function sendHeight() {
+    try {
+      var height = getContentHeight();
+      if (!heightSent || Math.abs(height - lastSentHeight) >= 1) {
+        if (window.flutter_inappwebview) {
+          console.log('Sending height: ' + height);
+          window.flutter_inappwebview.callHandler('contentHeight', height);
+          lastSentHeight = height;
+          heightSent = true;
+        }
+      }
+    } catch (e) {
+      console.error('Error sending height:', e);
+    }
+  }
+  
+  function notifyImagesLoaded() {
+    if (!allImagesLoaded) {
+      allImagesLoaded = true;
+      setTimeout(sendHeight, 100);
+      
+      try {
+        if (window.flutter_inappwebview) {
+          window.flutter_inappwebview.callHandler('imagesLoaded', true);
+        }
+      } catch (e) {
+        console.error('Error notifying images loaded:', e);
+      }
+    }
+  }
+  
+  // Force reload an image by resetting its src
+  function forceReloadImage(img) {
+    var src = img.src;
+    if (src && src.length > 0 && !src.startsWith('data:')) {
+      // Add cache-busting query parameter
+      var separator = src.indexOf('?') > -1 ? '&' : '?';
+      var newSrc = src + separator + '_t=' + Date.now();
+      console.log('Force reloading image: ' + src);
+      img.src = newSrc;
+    }
+  }
+  
+  // Check if an image is truly loaded and rendered
+  function isImageReady(img) {
+    // Check if it has actual dimensions
+    if (!img.complete) return false;
+    if (img.naturalWidth === 0 || img.naturalHeight === 0) return false;
+    // Also check rendered dimensions
+    var rect = img.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  }
+  
+  // Wait for all images to load with retries
+  function waitForImages() {
+    var images = document.querySelectorAll('img');
+    console.log('Found ' + images.length + ' images to load');
+    
+    if (images.length === 0) {
+      sendHeight();
+      notifyImagesLoaded();
+      return;
+    }
+    
+    var loadedCount = 0;
+    var totalImages = images.length;
+    var retryAttempts = {};
+    var maxRetries = 3;
+    
+    function imageLoaded(img, index) {
+      loadedCount++;
+      img.setAttribute('data-loaded', 'true');
+      console.log('Image ' + index + ' loaded (' + loadedCount + '/' + totalImages + ')');
+      setTimeout(sendHeight, 50);
+      
+      if (loadedCount >= totalImages) {
+        console.log('All images loaded!');
+        setTimeout(function() {
+          sendHeight();
+          notifyImagesLoaded();
+        }, 200);
+      }
+    }
+    
+    function checkImage(img, index) {
+      if (isImageReady(img)) {
+        imageLoaded(img, index);
+      } else if (img.complete) {
+        // Image claims to be complete but has no dimensions
+        // This often happens with network images - try to reload
+        retryAttempts[index] = (retryAttempts[index] || 0) + 1;
+        if (retryAttempts[index] <= maxRetries) {
+          console.log('Image ' + index + ' complete but not rendered, retry ' + retryAttempts[index]);
+          setTimeout(function() {
+            if (!isImageReady(img)) {
+              forceReloadImage(img);
+            } else {
+              imageLoaded(img, index);
+            }
+          }, 500 * retryAttempts[index]);
+        } else {
+          console.log('Image ' + index + ' failed after retries - URL: ' + (img.src || 'unknown').substring(0, 100));
+          img.style.minHeight = '100px';
+          img.style.backgroundColor = 'rgba(100,100,100,0.3)';
+          img.style.animation = 'none';
+          img.setAttribute('data-loaded', 'true');
+          loadedCount++;
+          setTimeout(sendHeight, 50);
+          if (loadedCount >= totalImages) {
+            setTimeout(function() {
+              sendHeight();
+              notifyImagesLoaded();
+            }, 200);
+          }
+        }
+      } else {
+        // Image is still loading
+        img.onload = function() {
+          setTimeout(function() {
+            if (isImageReady(img)) {
+              imageLoaded(img, index);
+            } else {
+              checkImage(img, index);
+            }
+          }, 100);
+        };
+        img.onerror = function(e) {
+          var errorInfo = {
+            url: this.src,
+            complete: this.complete,
+            naturalWidth: this.naturalWidth,
+            naturalHeight: this.naturalHeight,
+            event: e ? JSON.stringify(e, Object.getOwnPropertyNames(e)) : 'no event'
+          };
+          console.log('Image ' + index + ' error (attempt ' + ((retryAttempts[index] || 0) + 1) + '): ' + JSON.stringify(errorInfo));
+          
+          // Retry mechanism - don't immediately mark as loaded
+          retryAttempts[index] = (retryAttempts[index] || 0) + 1;
+          if (retryAttempts[index] <= maxRetries) {
+            console.log('Retrying image ' + index + ' in ' + (500 * retryAttempts[index]) + 'ms');
+            setTimeout(function() {
+              // Force reload the image
+              var src = img.src;
+              if (src && src.length > 0 && !src.startsWith('data:')) {
+                var separator = src.indexOf('?') > -1 ? '&' : '?';
+                var newSrc = src.split('?')[0] + separator + '_retry=' + retryAttempts[index] + '&_t=' + Date.now();
+                console.log('Reloading image ' + index + ': ' + newSrc.substring(0, 80));
+                img.src = newSrc;
+              }
+            }, 500 * retryAttempts[index]);
+          } else {
+            // Max retries reached, give up
+            console.log('Image ' + index + ' failed after ' + maxRetries + ' retries, giving up');
+            this.style.display = 'none';
+            imageLoaded(img, index);
+          }
+        };
+      }
+    }
+    
+    images.forEach(function(img, index) {
+      checkImage(img, index);
+    });
+    
+    // Final fallback
+    setTimeout(function() {
+      if (!allImagesLoaded) {
+        console.log('Fallback: forcing completion after timeout');
+        sendHeight();
+        notifyImagesLoaded();
+      }
+    }, 8000);
+  }
+  
+  // Periodic check for unloaded images
+  function checkUnloadedImages() {
+    var images = document.querySelectorAll('img');
+    var unloaded = 0;
+    images.forEach(function(img, index) {
+      if (!isImageReady(img) && img.src && !img.src.startsWith('data:')) {
+        unloaded++;
+        console.log('Image ' + index + ' still not loaded: ' + img.src.substring(0, 50));
+      }
+    });
+    if (unloaded > 0) {
+      console.log(unloaded + ' images still unloaded');
+    }
+    return unloaded;
+  }
+  
+  // Delay image loading to ensure WebView network is ready
+  function deferImageLoading() {
+    var images = document.querySelectorAll('img');
+    images.forEach(function(img) {
+      // Only defer external images (not data URIs)
+      if (img.src && !img.src.startsWith('data:') && !img.getAttribute('data-deferred')) {
+        img.setAttribute('data-original-src', img.src);
+        img.setAttribute('data-deferred', 'true');
+        img.removeAttribute('src');
+      }
+    });
+  }
+  
+  // Load deferred images after delay
+  function loadDeferredImages() {
+    var images = document.querySelectorAll('img[data-original-src]');
+    console.log('Loading ' + images.length + ' deferred images');
+    images.forEach(function(img, index) {
+      var originalSrc = img.getAttribute('data-original-src');
+      if (originalSrc) {
+        console.log('Setting src for image ' + index + ': ' + originalSrc.substring(0, 50));
+        img.src = originalSrc;
+        img.removeAttribute('data-original-src');
+      }
+    });
+  }
+  
+  function observeLayoutChanges() {
+    var root = document.getElementById('measure-root');
+    if (root && window.ResizeObserver) {
+      new ResizeObserver(function() { sendHeight(); }).observe(root);
+    }
+    document.addEventListener('toggle', function() {
+      setTimeout(sendHeight, 50);
+    }, true);
+  }
+
+  function init() {
+    document.querySelectorAll('details').forEach(function(d){ d.open = true; });
+    deferImageLoading();
+    observeLayoutChanges();
+    sendHeight();
+    setTimeout(sendHeight, 150);
+    setTimeout(sendHeight, 300);
+    
+    // Load images after a short delay to ensure WebView is fully ready
+    setTimeout(function() {
+      loadDeferredImages();
+      waitForImages();
+    }, 200);
+    
+    setTimeout(sendHeight, 500);
+    setTimeout(sendHeight, 1000);
+    setTimeout(function() {
+      sendHeight();
+      checkUnloadedImages();
+    }, 2000);
+    setTimeout(function() {
+      sendHeight();
+      checkUnloadedImages();
+    }, 4000);
+  }
+  
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+  
+  window.onload = function() {
+    setTimeout(sendHeight, 100);
+    setTimeout(sendHeight, 500);
+  };
+</script>
+</body>
+</html>
+''';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fullHtml = _buildHtml();
+
+    if (_hasError) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.error_outline, color: Colors.orange),
+            const SizedBox(height: 8),
+            Text(
+              'Failed to render HTML content',
+              style: TextStyle(color: widget.textColor),
+            ),
+            if (_errorMessage != null)
+              Text(
+                _errorMessage!,
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
+              ),
+          ],
+        ),
+      );
+    }
+
+    return GestureDetector(
+      onLongPress: widget.onLongPress,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+        clipBehavior: Clip.none,
+        constraints: BoxConstraints(
+          minHeight: _minHeight,
+        ),
+        height: _contentHeight,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            InAppWebView(
+              initialData: InAppWebViewInitialData(
+                data: fullHtml,
+                mimeType: 'text/html',
+                encoding: 'utf-8',
+                baseUrl: WebUri('about:blank'),
+              ),
+              initialSettings: InAppWebViewSettings(
+                transparentBackground: true,
+                disableHorizontalScroll: true,
+                disableVerticalScroll: true, // Disable scroll, we adjust container height
+                supportZoom: false,
+                javaScriptEnabled: true,
+                mediaPlaybackRequiresUserGesture: false,
+                allowsInlineMediaPlayback: true,
+                useShouldOverrideUrlLoading: true,
+                allowsBackForwardNavigationGestures: false,
+                iframeAllowFullscreen: false,
+              ),
+              onWebViewCreated: (controller) {
+                debugPrint('🌐 WebView created');
+                _webViewController = controller;
+                
+                // Handler for content height updates
+                controller.addJavaScriptHandler(
+                  handlerName: 'contentHeight',
+                  callback: (args) {
+                    if (args.isEmpty || !mounted) return;
+                    final height = (args[0] as num).toDouble();
+                    _heightUpdateCount++;
+                    final resolved = resolveHtmlWebViewHeight(
+                      currentHeight: _contentHeight,
+                      measuredHeight: height,
+                      updateCount: _heightUpdateCount,
+                    );
+                    if (resolved == null) {
+                      debugPrint(
+                        '🌐 Skipping height: $height (current=$_contentHeight, #$_heightUpdateCount)',
+                      );
+                      return;
+                    }
+                    debugPrint(
+                      '🌐 Updating height: $_contentHeight -> $resolved (update #$_heightUpdateCount)',
+                    );
+                    setState(() {
+                      _contentHeight = resolved;
+                      _isLoading = false;
+                    });
+                  },
+                );
+                
+                // Handler for images loaded notification
+                controller.addJavaScriptHandler(
+                  handlerName: 'imagesLoaded',
+                  callback: (args) {
+                    debugPrint('🌐 Images loaded notification received');
+                    if (mounted && !_imagesLoaded) {
+                      setState(() {
+                        _imagesLoaded = true;
+                      });
+                      // Request final height update after images loaded
+                      Future.delayed(const Duration(milliseconds: 200), () {
+                        _requestHeightUpdate();
+                      });
+                    }
+                  },
+                );
+              },
+              onLoadStart: (controller, url) {
+                debugPrint('🌐 WebView load start: $url');
+              },
+              onLoadStop: (controller, url) async {
+                debugPrint('🌐 WebView load stop: $url');
+                if (mounted) {
+                  setState(() => _isLoading = false);
+                }
+                // Trigger height calculation
+                await controller.evaluateJavascript(source: 'sendHeight();');
+                
+                // Additional height checks after load
+                Future.delayed(const Duration(milliseconds: 300), _requestHeightUpdate);
+                Future.delayed(const Duration(milliseconds: 800), _requestHeightUpdate);
+              },
+              onLoadError: (controller, url, code, message) {
+                debugPrint('🌐 WebView error: $code - $message');
+                if (mounted) {
+                  setState(() {
+                    _hasError = true;
+                    _errorMessage = message;
+                    _isLoading = false;
+                  });
+                }
+              },
+              onConsoleMessage: (controller, consoleMessage) {
+                debugPrint('🌐 Console: ${consoleMessage.message}');
+              },
+              shouldOverrideUrlLoading: (controller, navigationAction) async {
+                final url = navigationAction.request.url;
+                if (url != null && url.toString() != 'about:blank') {
+                  final uri = Uri.tryParse(url.toString());
+                  if (uri != null) {
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  }
+                  return NavigationActionPolicy.CANCEL;
+                }
+                return NavigationActionPolicy.ALLOW;
+              },
+            ),
+            if (_isLoading)
+              Positioned.fill(
+                child: Container(
+                  color: AppTheme.darkCard,
+                  child: const Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator(strokeWidth: 2),
+                        SizedBox(height: 8),
+                        Text(
+                          'Loading content...',
+                          style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _colorToHex(Color color) {
+    final r = (color.r * 255).round();
+    final g = (color.g * 255).round();
+    final b = (color.b * 255).round();
+    return 'rgba($r, $g, $b, ${color.a})';
+  }
+}
+
+/// Check if HTML content is complex enough to warrant WebView rendering
+bool isComplexHtml(String html) {
+  // Check for complex CSS features that flutter_html doesn't support well
+  final complexPatterns = [
+    RegExp(r'display:\s*flex', caseSensitive: false),
+    RegExp(r'display:\s*grid', caseSensitive: false),
+    RegExp(r'box-shadow:', caseSensitive: false),
+    RegExp(r'transition:', caseSensitive: false),
+    RegExp(r'transform:', caseSensitive: false),
+    RegExp(r'animation:', caseSensitive: false),
+    RegExp(r'@keyframes', caseSensitive: false),
+    RegExp(r'object-fit:', caseSensitive: false),
+    RegExp(r'background:\s*linear-gradient', caseSensitive: false),
+    RegExp(r'background:\s*radial-gradient', caseSensitive: false),
+    RegExp(r'overflow:\s*(hidden|auto|scroll)', caseSensitive: false),
+    RegExp(r'height:\s*\d+', caseSensitive: false),
+    RegExp(r'<[^>]+style="[^"]{10,}"', caseSensitive: false),
+  ];
+  
+  for (final pattern in complexPatterns) {
+    if (pattern.hasMatch(html)) {
+      return true;
+    }
+  }
+  
+  // Check for multiple nested divs with styles (likely a complex layout)
+  final styledDivCount = RegExp(r'<div[^>]*style="[^"]*"[^>]*>', caseSensitive: false)
+      .allMatches(html)
+      .length;
+  if (styledDivCount >= 3) {
+    return true;
+  }
+  
+  return false;
+}
+
+/// Decide the Flutter WebView height from a JS content measurement.
+/// Always grows to fit content; only shrinks during early layout.
+double? resolveHtmlWebViewHeight({
+  required double currentHeight,
+  required double measuredHeight,
+  required int updateCount,
+}) {
+  if (measuredHeight <= 10 || measuredHeight >= 50000) return null;
+  final newHeight = measuredHeight + 12;
+  final diff = (newHeight - currentHeight).abs();
+  if (diff < 1) return null;
+  if (newHeight > currentHeight) return newHeight;
+  if (updateCount <= 6) return newHeight;
+  return null;
+}

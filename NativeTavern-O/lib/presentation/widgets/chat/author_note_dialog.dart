@@ -1,0 +1,230 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:native_tavern/presentation/providers/chat_providers.dart';
+import 'package:native_tavern/l10n/generated/app_localizations.dart';
+
+/// Dialog for editing Author's Note settings
+class AuthorNoteDialog extends ConsumerStatefulWidget {
+  final String chatId;
+
+  const AuthorNoteDialog({super.key, required this.chatId});
+
+  @override
+  ConsumerState<AuthorNoteDialog> createState() => _AuthorNoteDialogState();
+}
+
+class _AuthorNoteDialogState extends ConsumerState<AuthorNoteDialog> {
+  late TextEditingController _contentController;
+  late int _depth;
+  late bool _enabled;
+  bool _hasChanges = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final activeChat = ref.read(activeChatProvider).chat;
+    final chat = activeChat?.id == widget.chatId ? activeChat : null;
+    _contentController = TextEditingController(text: chat?.authorNote ?? '');
+    _depth = chat?.authorNoteDepth ?? 4;
+    _enabled = chat?.authorNoteEnabled ?? false;
+    
+    _contentController.addListener(_onChanged);
+  }
+
+  @override
+  void dispose() {
+    _contentController.removeListener(_onChanged);
+    _contentController.dispose();
+    super.dispose();
+  }
+
+  void _onChanged() {
+    if (!_hasChanges) {
+      setState(() => _hasChanges = true);
+    }
+  }
+
+  Future<void> _save() async {
+    final saved =
+        await ref.read(activeChatProvider.notifier).updateAuthorNoteSettings(
+      chatId: widget.chatId,
+      content: _contentController.text,
+      depth: _depth,
+      enabled: _enabled,
+    );
+    if (mounted && saved) {
+      Navigator.of(context).pop(true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Dialog(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 500, maxHeight: 600),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
+              Row(
+                children: [
+                  Icon(
+                    Icons.note_alt_outlined,
+                    color: colorScheme.primary,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    AppLocalizations.of(context)!.authorsNote,
+                    style: theme.textTheme.titleLarge,
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                AppLocalizations.of(context)!.authorsNoteDescription,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Enable toggle
+              SwitchListTile(
+                title: Text(AppLocalizations.of(context)!.enableAuthorsNote),
+                subtitle: Text(AppLocalizations.of(context)!.injectNoteIntoContext),
+                value: _enabled,
+                onChanged: (value) {
+                  setState(() {
+                    _enabled = value;
+                    _hasChanges = true;
+                  });
+                },
+                contentPadding: EdgeInsets.zero,
+              ),
+              const SizedBox(height: 16),
+
+              // Depth selector
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          AppLocalizations.of(context)!.injectionDepth,
+                          style: theme.textTheme.titleSmall,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          AppLocalizations.of(context)!.messagesFromEndWhereInserted,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  SizedBox(
+                    width: 100,
+                    child: DropdownButtonFormField<int>(
+                      value: _depth,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                      ),
+                      items: List.generate(21, (i) => i).map((depth) {
+                        return DropdownMenuItem(
+                          value: depth,
+                          child: Text('$depth'),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() {
+                            _depth = value;
+                            _hasChanges = true;
+                          });
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+
+              // Content field
+              Text(
+                AppLocalizations.of(context)!.noteContent,
+                style: theme.textTheme.titleSmall,
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: TextField(
+                  controller: _contentController,
+                  maxLines: null,
+                  expands: true,
+                  textAlignVertical: TextAlignVertical.top,
+                  decoration: InputDecoration(
+                    hintText: AppLocalizations.of(context)!.authorsNoteHint,
+                    border: const OutlineInputBorder(),
+                    filled: true,
+                    fillColor: colorScheme.surfaceContainerHighest.withOpacity(0.3),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Supports macros like {{char}}, {{user}}, etc.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Actions
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text(AppLocalizations.of(context)!.cancel),
+                  ),
+                  const SizedBox(width: 12),
+                  FilledButton.icon(
+                    onPressed: _save,
+                    icon: const Icon(Icons.save),
+                    label: Text(AppLocalizations.of(context)!.save),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Show the Author's Note dialog
+Future<bool?> showAuthorNoteDialog(BuildContext context, String chatId) {
+  return showDialog<bool>(
+    context: context,
+    builder: (context) => AuthorNoteDialog(chatId: chatId),
+  );
+}

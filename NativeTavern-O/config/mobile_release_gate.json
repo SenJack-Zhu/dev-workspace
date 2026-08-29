@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "requiredPlatforms": ["android", "ios"],
+  "requiredScenarios": [
+    {
+      "id": "offline",
+      "title": "Offline behavior",
+      "procedure": "Disable all network transports, relaunch, use local data, and send a typed message with remote features unavailable.",
+      "expectedResult": "Local data remains usable, external calls fail clearly, and typed chat stays responsive.",
+      "requiredEvidence": ["screenRecording", "deviceLog"]
+    },
+    {
+      "id": "weakNetwork",
+      "title": "Weak network behavior",
+      "procedure": "Apply high latency, packet loss, and low bandwidth while starting and cancelling remote requests.",
+      "expectedResult": "Requests time out or cancel predictably without duplicate messages, frozen controls, or lost drafts.",
+      "requiredEvidence": ["networkProfile", "screenRecording", "deviceLog"]
+    },
+    {
+      "id": "permissionDenied",
+      "title": "Permission denial",
+      "procedure": "Deny microphone, speech, photos, and file access when requested, then retry the related action.",
+      "expectedResult": "Denial is recoverable, no permission is requested before user action, and typed chat remains available.",
+      "requiredEvidence": ["screenRecording", "deviceLog"]
+    },
+    {
+      "id": "lowMemory",
+      "title": "Low-memory recovery",
+      "procedure": "Create OS memory pressure while a populated chat is backgrounded, then return and continue the conversation.",
+      "expectedResult": "The process either resumes coherently or restores persisted state without corrupt data or duplicate sends.",
+      "requiredEvidence": ["profilerExport", "screenRecording", "deviceLog"]
+    },
+    {
+      "id": "foregroundBackgroundRecovery",
+      "title": "Foreground and background recovery",
+      "procedure": "Background and foreground during generation, STT, TTS, Live2D rendering, and an idle typed chat.",
+      "expectedResult": "Active media work stops safely, the UI resumes, and the persisted draft and chat remain coherent.",
+      "requiredEvidence": ["screenRecording", "deviceLog"]
+    },
+    {
+      "id": "performance",
+      "title": "Performance baseline",
+      "procedure": "Profile a release build for at least 30 minutes across chat scrolling, generation, feature panels, and idle time.",
+      "expectedResult": "Frame, memory, startup, and typed-chat latency stay within the declared thresholds without sustained growth.",
+      "requiredEvidence": ["profilerExport", "metricsSummary"]
+    },
+    {
+      "id": "featuresDisabledTextChatBaseline",
+      "title": "Text chat with new features disabled",
+      "procedure": "Disable memory extraction, RPG mode, Data Bank context, voice, Live2D, Tool Calling, and MCP, then create, send, swipe, edit, and reopen a text chat.",
+      "expectedResult": "The text-only workflow matches the baseline and makes no new permission prompt or external request.",
+      "requiredEvidence": ["screenRecording", "externalCallAudit", "deviceLog"]
+    }
+  ],
+  "performanceThresholds": {
+    "minimumSampleMinutes": 30,
+    "maximumStartupMilliseconds": 5000,
+    "maximumTypedChatP95Milliseconds": 250,
+    "maximumFrameBuildP95Milliseconds": 16.7,
+    "maximumFrameRasterP95Milliseconds": 16.7,
+    "maximumDroppedFramePercent": 1.0,
+    "maximumMemoryGrowthMiB": 50.0
+  },
+  "automatedChecks": [
+    {
+      "id": "fullTestSuite",
+      "command": "flutter test --no-pub --concurrency=1"
+    },
+    {
+      "id": "formatCheck",
+      "command": "tool/check_changed_dart_format.sh"
+    },
+    {
+      "id": "live2dDevelopmentAudit",
+      "command": "dart run tool/live2d_release_gate.dart --development"
+    },
+    {
+      "id": "manifestAudit",
+      "command": "dart run tool/mobile_release_gate.dart --development"
+    }
+  ]
+}

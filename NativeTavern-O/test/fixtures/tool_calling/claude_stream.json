@@ -1,0 +1,103 @@
+[
+  {
+    "type": "content_block_start",
+    "index": 0,
+    "content_block": {
+      "type": "thinking",
+      "thinking": ""
+    }
+  },
+  {
+    "type": "content_block_delta",
+    "index": 0,
+    "delta": {
+      "type": "thinking_delta",
+      "thinking": "Need both tools. "
+    }
+  },
+  {
+    "type": "content_block_stop",
+    "index": 0
+  },
+  {
+    "type": "content_block_start",
+    "index": 1,
+    "content_block": {
+      "type": "tool_use",
+      "id": "call_weather",
+      "name": "weather",
+      "input": {}
+    }
+  },
+  {
+    "type": "content_block_delta",
+    "index": 1,
+    "delta": {
+      "type": "input_json_delta",
+      "partial_json": "{\"city\":\"Sing"
+    }
+  },
+  {
+    "type": "content_block_delta",
+    "index": 1,
+    "delta": {
+      "type": "input_json_delta",
+      "partial_json": "apore\"}"
+    }
+  },
+  {
+    "type": "content_block_stop",
+    "index": 1
+  },
+  {
+    "type": "content_block_start",
+    "index": 2,
+    "content_block": {
+      "type": "tool_use",
+      "id": "call_time",
+      "name": "time",
+      "input": {}
+    }
+  },
+  {
+    "type": "content_block_delta",
+    "index": 2,
+    "delta": {
+      "type": "input_json_delta",
+      "partial_json": "{\"zone\":\"Asia/Singapore\"}"
+    }
+  },
+  {
+    "type": "content_block_stop",
+    "index": 2
+  },
+  {
+    "type": "content_block_start",
+    "index": 3,
+    "content_block": {
+      "type": "text",
+      "text": ""
+    }
+  },
+  {
+    "type": "content_block_delta",
+    "index": 3,
+    "delta": {
+      "type": "text_delta",
+      "text": "Checking now."
+    }
+  },
+  {
+    "type": "content_block_stop",
+    "index": 3
+  },
+  {
+    "type": "message_delta",
+    "delta": {
+      "stop_reason": "tool_use"
+    }
+  },
+  {
+    "type": "message_stop"
+  }
+]

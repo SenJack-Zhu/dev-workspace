@@ -1,0 +1,55 @@
+{
+  "checkedAt": "2026-08-11",
+  "appId": "6757631215",
+  "unresolvedReviews": [],
+  "responses": [
+    {
+      "reviewId": "00000192-c944-ef03-5ab6-4e6500000000",
+      "responseId": "40000192-c944-ef03-5ab6-4e6503e0bfe8",
+      "publishStateAtVerification": "PENDING_PUBLISH",
+      "territory": "CHN",
+      "classification": "resolved_in_1.2.12",
+      "responseBody": "感谢支持和催更。群聊创建、成员保存和启动流程已经修复；语音输入、系统/远程朗读以及 Live2D 口型同步也已完善。这些更新已包含在 1.2.12（Build 30）并已提交 App Store 审核。"
+    },
+    {
+      "reviewId": "00000192-c944-ef03-5234-b48e00000000",
+      "responseId": "40000192-c944-ef03-5234-b48e03e0bfe9",
+      "publishStateAtVerification": "PENDING_PUBLISH",
+      "territory": "CHN",
+      "classification": "no_issue_thanks",
+      "responseBody": "感谢理解和支持。界面本地化本来就是我们应该完善的部分，1.2.12 又完成了一轮中文和多语言检查，并补充了 Live2D、语音、长期记忆等更新。"
+    },
+    {
+      "reviewId": "00000192-c944-ef03-4d41-fce000000000",
+      "responseId": "40000192-c944-ef03-4d41-fce003e0bfeb",
+      "publishStateAtVerification": "PENDING_PUBLISH",
+      "territory": "CHN",
+      "classification": "no_issue_thanks",
+      "responseBody": "感谢鼓励。我们会继续修复问题并完善体验。1.2.12（Build 30）已经提交 App Store 审核，包含 Live2D、语音、长期记忆和稳定性改进。"
+    },
+    {
+      "reviewId": "00000192-c944-ef03-4cb2-7e6d00000000",
+      "responseId": "40000192-c944-ef03-4cb2-7e6d03e0bfee",
+      "publishStateAtVerification": "PENDING_PUBLISH",
+      "territory": "CHN",
+      "classification": "no_issue_thanks",
+      "responseBody": "感谢支持。我们会继续更新和完善 NativeTavern。1.2.12（Build 30）已经提交 App Store 审核，新增 Live2D、Spine、长期记忆、语音功能并修复多项稳定性问题。"
+    },
+    {
+      "reviewId": "00000192-c944-ef03-3bc8-65bc00000000",
+      "responseId": "40000192-c944-ef03-3bc8-65bc03e0bff3",
+      "publishStateAtVerification": "PENDING_PUBLISH",
+      "territory": "MEX",
+      "classification": "no_issue_thanks",
+      "responseBody": "¡Muchas gracias por tu apoyo! Seguimos mejorando la creación e importación de personajes. La versión 1.2.12 ya fue enviada a revisión e incluye Live2D, Spine, memoria a largo plazo y mejoras de estabilidad."
+    },
+    {
+      "reviewId": "00000192-c944-ef03-3af5-3c1400000000",
+      "responseId": "40000192-c944-ef03-3af5-3c1403e0bff5",
+      "publishStateAtVerification": "PENDING_PUBLISH",
+      "territory": "KAZ",
+      "classification": "no_issue_thanks",
+      "responseBody": "Thank you for your support! Version 1.2.12 (Build 30) has been submitted for App Store review with Live2D and Spine improvements, long-term memory, voice features, and stability fixes."
+    }
+  ]
+}

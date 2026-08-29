@@ -1,0 +1,23 @@
+{
+  "appId": "6757631215",
+  "appStoreVersionId": "b84dbfce-cb0c-417c-8f95-44b41b0894d1",
+  "versionString": "1.2.13",
+  "releaseType": "AFTER_APPROVAL",
+  "buildId": "790bdb18-3724-454b-adc1-d62191cf74bc",
+  "buildNumber": "34",
+  "ipaSha256": "50248e344fef5ce918ffd81b9cec2633ae83791511e12f491f2eaab0cdf17874",
+  "minimumOsVersion": "15.0",
+  "usesIdfa": false,
+  "localizationCount": 17,
+  "reviewSubmissionId": "a240e385-f7e4-41ed-91e2-fd6c38a34ff1",
+  "submittedDate": "2026-08-20T13:46:42.795Z",
+  "stateAtVerification": "WAITING_FOR_REVIEW",
+  "testFlightInternalBuildState": "IN_BETA_TESTING",
+  "googlePlayTrack": "production",
+  "googlePlayVersionCode": "34",
+  "googlePlayReleaseState": "completed",
+  "aabSha256": "656e5a8bb6f822ed8fbe5e9950eb32f4043546d817bcda89873633db2547e7eb",
+  "apkUrl": "https://download.nativetavern.com/NativeTavern.apk",
+  "apkSha256": "e32d6352722c65e5c05f1653b369e49d5363907791a25c491a3d910d44f6b8ba",
+  "discordMessageId": "1539994412829122711"
+}

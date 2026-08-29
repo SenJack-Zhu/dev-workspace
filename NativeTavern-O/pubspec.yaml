@@ -1,0 +1,135 @@
+name: native_tavern
+description: A native cross-platform SillyTavern client for iOS and Android
+publish_to: 'none'
+version: 0.1.15+39
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+  # Includes the iPadOS top-bar overlay dismissal fix.
+  flutter: '>=3.44.9'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # State Management
+  flutter_riverpod: ^2.4.9
+  riverpod_annotation: ^2.3.3
+  
+  # Navigation
+  go_router: ^13.0.1
+  
+  # Database
+  drift: ^2.14.1
+  sqlite3_flutter_libs: ^0.5.18
+  
+  # Storage & Paths
+  path_provider: ^2.1.1
+  path: ^1.8.3
+  shared_preferences: ^2.2.2
+  flutter_secure_storage: ^9.2.4
+  
+  # File Picker
+  file_picker: ^10.3.8
+  
+  # Networking
+  dio: ^5.4.0
+  mcp_dart: ^2.4.0
+  
+  # Image Processing
+  image: ^4.1.3
+  
+  # Archive Handling
+  archive: ^3.4.9
+
+  # Local Document Parsing
+  charset: ^2.0.1
+  crypto: ^3.0.7
+  html: ^0.15.6
+  markdown: ^7.3.0
+  pdfrx: 1.3.5
+  xml: ^6.5.0
+  
+  # Code Generation (Runtime)
+  freezed_annotation: ^2.4.1
+  json_annotation: ^4.8.1
+  
+  # Utils
+  uuid: ^4.2.1
+  intl: ^0.20.2
+  package_info_plus: ^8.3.1
+  collection: ^1.18.0
+  equatable: ^2.0.5
+  yaml: ^3.1.3
+  
+  # UI Components
+  cached_network_image: ^3.3.0
+  flutter_markdown: ^0.6.18
+  flutter_inappwebview: ^6.0.0
+  shimmer: ^3.0.0
+  # Pin the upstream tree: the pub.dev 1.0.2 archive omits Android shaders.
+  flutter_live2d:
+    git:
+      url: https://github.com/linh18nd/flutter_live2d.git
+      ref: 378b5b977df47672c78e12723f93854300a87e40
+  native_tavern_live2d_macos:
+    path: packages/native_tavern_live2d_macos
+  # Spine binary data must be read by a matching major/minor runtime. The
+  # local package pins official 4.1.14 and carries one Flutter API shim.
+  spine_flutter:
+    path: packages/spine_flutter_4_1_compat
+  share_plus: ^12.0.1
+  url_launcher: ^6.2.2
+  
+  # Image Picker
+  image_picker: ^1.0.7
+  gal: ^2.3.1
+  
+  # Google Drive Integration
+  google_sign_in: ^6.2.1
+  googleapis: ^13.2.0
+  extension_google_sign_in_as_googleapis_auth: ^2.0.12
+  flutter_tts: ^4.2.5
+  just_audio: ^0.10.6
+  # Keep the Android implementation compatible with the project's AGP 8 setup.
+  permission_handler: 12.0.1
+  record: ^6.2.1
+  speech_to_text: ^7.4.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+  sqlite3: ^2.9.4
+  
+  # Code Generation
+  build_runner: ^2.4.7
+  freezed: ^2.4.5
+  json_serializable: ^6.7.1
+  riverpod_generator: ^2.3.9
+  drift_dev: ^2.14.1
+  go_router_builder: ^2.4.1
+  flutter_launcher_icons: ^0.14.4
+
+flutter:
+  uses-material-design: true
+  generate: true
+  
+  assets:
+    - assets/characters/
+    - assets/characters/images/
+    - assets/characters/json/
+    - assets/world_info/
+    - assets/live2d/hiyori_free/
+    - assets/live2d/hiyori_free/hiyori_free_t08.2048/
+    - assets/live2d/hiyori_free/motion/
+  
+  # Custom fonts can be added later
+  # fonts:
+  #   - family: NotoSans
+  #     fonts:
+  #       - asset: assets/fonts/NotoSans-Regular.ttf

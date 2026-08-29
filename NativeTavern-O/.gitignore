@@ -1,0 +1,79 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+ios
+ios_*
+android
+web
+macos
+!packages/native_tavern_live2d_macos/macos/
+!packages/native_tavern_live2d_macos/macos/**
+packages/native_tavern_live2d_macos/macos/CubismCore/
+linux
+windows
+!packages/spine_flutter_4_1_compat/android/
+!packages/spine_flutter_4_1_compat/android/**
+!packages/spine_flutter_4_1_compat/ios/
+!packages/spine_flutter_4_1_compat/ios/**
+!packages/spine_flutter_4_1_compat/linux/
+!packages/spine_flutter_4_1_compat/linux/**
+!packages/spine_flutter_4_1_compat/macos/
+!packages/spine_flutter_4_1_compat/macos/**
+!packages/spine_flutter_4_1_compat/windows/
+!packages/spine_flutter_4_1_compat/windows/**
+release
+.env
+build_*
+!build_ios.sh
+!build_android.sh
+!tool/build_android_release.dart
+resize_app_store_images.py
+config
+!config/
+config/*
+!config/mobile_release_gate.json
+assets_for_discord
+scripts
+.wrangler/cache/wrangler-account.json

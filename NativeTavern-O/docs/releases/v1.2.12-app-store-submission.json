@@ -1,0 +1,15 @@
+{
+  "appId": "6757631215",
+  "appStoreVersionId": "fa2860ef-5df0-4d4d-b3a7-585d8885d376",
+  "versionString": "1.2.12",
+  "releaseType": "AFTER_APPROVAL",
+  "buildId": "bc2b0d9f-fc7c-42ed-99dd-bed1a7e0674a",
+  "buildNumber": "33",
+  "ipaSha256": "43a596298edbc4d9f8bf5c4d401ef2cf1185dfec0ef5099128c129593dd2f434",
+  "minimumOsVersion": "15.0",
+  "usesIdfa": false,
+  "localizationCount": 17,
+  "reviewSubmissionId": "93bdac84-5784-4ff6-9c45-2f1e727edab1",
+  "submittedDate": "2026-08-18T06:02:12.264Z",
+  "stateAtVerification": "WAITING_FOR_REVIEW"
+}
