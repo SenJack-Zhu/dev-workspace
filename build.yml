@@ -1,0 +1,90 @@
+name: Build Flutter Android APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  # 步骤 1: 传感器任务 - 专门检测文件变动 (Rust、依赖或配置)
+  check_changes:
+    runs-on: ubuntu-latest
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v2
+        id: filter
+        with:
+          filters: |
+            rust:
+              - 'rust/**'
+              - 'Cargo.lock'
+              - 'pubspec.yaml'
+
+  # 步骤 2: 主构建任务
+  build:
+    needs: check_changes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      # --- Rust 动态构建逻辑 ---
+      - name: Install Codegen (Only if Rust changed)
+        if: needs.check_changes.outputs.rust == 'true'
+        run: cargo install flutter_rust_bridge_codegen
+
+      - name: Setup Rust (Only if Rust changed)
+        if: needs.check_changes.outputs.rust == 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android, armv7-linux-androideabi, x86_64-linux-android
+
+      - name: Run Codegen (Only if Rust changed)
+        if: needs.check_changes.outputs.rust == 'true'
+        run: flutter_rust_bridge_codegen generate
+      # --- Rust 逻辑结束 ---
+
+      - name: Install Flutter dependencies
+        run: |
+          # 1. 如果没有 android 目录，现场生成地基
+          if [ ! -d "android" ]; then
+            flutter create --platforms=android --project-name native_tavern .
+          fi
+          
+          # 2. 拉取依赖（此时 package_info_plus 会链接到新生成的安卓地基）
+          flutter pub get
+
+      - name: Build with G-Series
+        id: get_ver  # <--- 💡 核心！必须加这一行，下面才能接住球
+        run: |
+          # 1. 自动提取原作者的主版本号 (去掉 +21 这种构建号，只留 0.1.7)
+          # tr -d '\r' 是为了防止 Windows 换行符捣乱
+          RAW_VER=$(grep 'version: ' pubspec.yaml | cut -d ' ' -f 2 | cut -d '+' -f 1 | tr -d '\r')
+    
+          # 2. 【手动迭代点】你想升 G 版本时，就改下面这个数字
+          # 这样你的版本号就会变成 0.1.7-G1, 0.1.7-G2...
+          G_SUB_VER="1"
+    
+          # 3. 拼接最终显示的字符串
+          APP_VER="${RAW_VER}-G${G_SUB_VER}"
+    
+          echo "version=$APP_VER" >> $GITHUB_OUTPUT
+          
+          echo "Building: $APP_VER"
+          
+          # 4. 注入给 Flutter
+          
+          flutter build apk --release --dart-define=VERSION=$APP_VER
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          # 💡 这样改，出来的文件名就是 app-release-0.1.7-G1
+          name: app-release-${{ steps.get_ver.outputs.version }}
+          path: build/app/outputs/flutter-apk/app-release.apk
