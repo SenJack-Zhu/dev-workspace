@@ -96,6 +96,8 @@ class ModuleSettingsViewModel @Inject constructor(
     val moduleDirPath: String get() = moduleImporter.moduleDir.absolutePath
     val packageName: String get() = app.packageName
 
+    fun isBuiltInPackage(pkgName: String): Boolean = moduleLoader.isBuiltInPackage(pkgName)
+
     init {
         refresh()
     }
@@ -153,7 +155,11 @@ class ModuleSettingsViewModel @Inject constructor(
     }
 
     fun selectAllPackages() {
-        _selectedPackages.value = _packages.value.map { it.name }.toSet()
+        // Select only non-built-in packages (built-in can't be deleted anyway)
+        _selectedPackages.value = _packages.value
+            .filter { !moduleLoader.isBuiltInPackage(it.name) }
+            .map { it.name }
+            .toSet()
     }
 
     fun deselectAllPackages() {
@@ -194,11 +200,20 @@ class ModuleSettingsViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             _isLoading.value = true
             var deleted = 0
+            var skippedBuiltIn = 0
             _selectedPackages.value.forEach { pkg ->
-                if (moduleImporter.deletePackage(pkg)) deleted++
+                if (moduleLoader.isBuiltInPackage(pkg)) {
+                    skippedBuiltIn++
+                } else if (moduleImporter.deletePackage(pkg)) {
+                    deleted++
+                }
             }
             moduleLoader.loadAll()
-            _message.value = "已删除 $deleted 个模块包"
+            val msg = buildString {
+                append("已删除 $deleted 个模块包")
+                if (skippedBuiltIn > 0) append("，跳过 $skippedBuiltIn 个内置模块（不可删除）")
+            }
+            _message.value = msg
             _multiSelectMode.value = false
             _selectedPackages.value = emptySet()
             refresh()
@@ -234,6 +249,10 @@ class ModuleSettingsViewModel @Inject constructor(
 
     fun deletePackage(packageName: String) {
         viewModelScope.launch(Dispatchers.IO) {
+            if (moduleLoader.isBuiltInPackage(packageName)) {
+                _message.value = "内置模块不可删除：$packageName"
+                return@launch
+            }
             val success = moduleImporter.deletePackage(packageName)
             _message.value = if (success) "已删除模块包：$packageName" else "删除失败：$packageName"
             if (success) {

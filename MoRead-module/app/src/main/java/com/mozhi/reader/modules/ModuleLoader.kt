@@ -29,6 +29,56 @@ class ModuleLoader @Inject constructor(
 
     private val loadedModules = mutableListOf<String>()
 
+    /**
+     * Built-in modules bundled in assets/modules/.
+     * These are restored to internal storage on every load,
+     * so users cannot permanently delete them.
+     */
+    private val builtInPackages = listOf("text-proofread", "tts-enhance")
+
+    // ── Built-in module restoration ────────────────────────────────
+
+    /**
+     * Copy built-in modules from assets to internal storage.
+     * Runs on every loadAll() call so deleted built-in modules are restored.
+     */
+    private fun restoreBuiltInModules() {
+        val assetMgr = context.assets
+        for (pkgName in builtInPackages) {
+            val targetDir = File(moduleDir, pkgName)
+            targetDir.mkdirs()
+
+            try {
+                val assetPath = "modules/$pkgName"
+                val files = assetMgr.list(assetPath) ?: continue
+                for (fileName in files) {
+                    val targetFile = File(targetDir, fileName)
+                    // Skip if file already exists (preserve user modifications)
+                    if (targetFile.exists()) continue
+                    try {
+                        assetMgr.open("$assetPath/$fileName").use { input ->
+                            targetFile.outputStream().use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+                        hookRegistry.log("[ModuleLoader] Restored built-in: $pkgName/$fileName")
+                    } catch (e: Exception) {
+                        hookRegistry.log("[ModuleLoader] Failed to restore $pkgName/$fileName: ${e.message}")
+                    }
+                }
+            } catch (e: Exception) {
+                hookRegistry.log("[ModuleLoader] Built-in module $pkgName not found in assets: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Check if a package name is a built-in module.
+     */
+    fun isBuiltInPackage(pkgName: String): Boolean = pkgName in builtInPackages
+
+    fun getBuiltInPackages(): List<String> = builtInPackages
+
     // ── Enable/disable state ───────────────────────────────────────
 
     fun isModulesEnabled(): Boolean {
@@ -84,11 +134,14 @@ class ModuleLoader @Inject constructor(
         // Restart JS engine to clear all previous state
         jsEngine.restart()
 
+        // Ensure module directory exists
         if (!moduleDir.exists()) {
             moduleDir.mkdirs()
             hookRegistry.log("[ModuleLoader] Module directory created: ${moduleDir.absolutePath}")
-            return LoadResult(0, "Module directory created in internal storage")
         }
+
+        // Restore built-in modules from assets (idempotent: skips existing files)
+        restoreBuiltInModules()
 
         // Scan for .js files in all package subdirectories
         val jsFiles = collectJsFiles(moduleDir)

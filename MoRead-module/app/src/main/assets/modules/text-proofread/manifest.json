@@ -1,0 +1,21 @@
+{
+  "name": "text-proofread",
+  "displayName": "文本精校",
+  "version": "1.1.0",
+  "author": "MoRead",
+  "description": "文本精校模块，提供标点规范化、错别字替换、空白清理、自定义替换（支持正则）等功能，可分别作用于显示文本和 TTS 朗读文本。",
+  "settings": [
+    {"key": "enableDisplay", "label": "精校显示文本", "type": "bool", "default": "false"},
+    {"key": "enableTTS", "label": "精校 TTS 朗读文本", "type": "bool", "default": "true"},
+    {"key": "ruleFullwidthNum", "label": "全角数字转半角", "type": "bool", "default": "true"},
+    {"key": "ruleFullwidthLetter", "label": "全角字母转半角", "type": "bool", "default": "true"},
+    {"key": "ruleHalfwidthPunct", "label": "半角标点转全角（中文上下文）", "type": "bool", "default": "true"},
+    {"key": "ruleQuotes", "label": "引号规范化（弯引号→中文引号）", "type": "bool", "default": "true"},
+    {"key": "ruleEllipsis", "label": "省略号规范化（...→……）", "type": "bool", "default": "true"},
+    {"key": "ruleCollapsePunct", "label": "合并重复标点", "type": "bool", "default": "true"},
+    {"key": "ruleTrimWhitespace", "label": "清理多余空白", "type": "bool", "default": "true"},
+    {"key": "ruleCollapseNewlines", "label": "合并多余空行", "type": "bool", "default": "true"},
+    {"key": "ruleCommonTypos", "label": "常见错别字替换", "type": "bool", "default": "true"},
+    {"key": "customReplacements", "label": "自定义替换（每行一条: 原文→替换 或 regex:/pattern/→替换）", "type": "string", "default": ""}
+  ]
+}

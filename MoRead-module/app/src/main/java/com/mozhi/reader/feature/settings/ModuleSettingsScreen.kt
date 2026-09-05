@@ -263,10 +263,14 @@ fun ModuleSettingsScreen(
                             ) {
                                 // Checkbox in multi-select mode
                                 if (multiSelectMode) {
+                                    val builtIn = viewModel.isBuiltInPackage(pkg.name)
                                     Checkbox(
-                                        checked = isSelected,
-                                        onCheckedChange = { viewModel.togglePackageSelection(pkg.name) },
-                                        modifier = Modifier.padding(end = 8.dp)
+                                        checked = if (builtIn) false else isSelected,
+                                        onCheckedChange = {
+                                            if (!builtIn) viewModel.togglePackageSelection(pkg.name)
+                                        },
+                                        modifier = Modifier.padding(end = 8.dp),
+                                        enabled = !builtIn
                                     )
                                 }
 
@@ -281,10 +285,26 @@ fun ModuleSettingsScreen(
                                         .weight(1f)
                                         .padding(horizontal = 12.dp)
                                 ) {
-                                    Text(
-                                        text = pkg.displayName,
-                                        style = MaterialTheme.typography.bodyMedium
-                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = pkg.displayName,
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                        if (viewModel.isBuiltInPackage(pkg.name)) {
+                                            Spacer(Modifier.width(6.dp))
+                                            Surface(
+                                                color = MaterialTheme.colorScheme.primaryContainer,
+                                                shape = MaterialTheme.shapes.small,
+                                            ) {
+                                                Text(
+                                                    text = "内置",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                                                )
+                                            }
+                                        }
+                                    }
                                     Text(
                                         text = buildString {
                                             append("v${pkg.version}")
@@ -316,13 +336,15 @@ fun ModuleSettingsScreen(
                                     IconButton(onClick = { viewModel.requestExportPackage(pkg.name) }) {
                                         Icon(Icons.Outlined.Download, contentDescription = "导出")
                                     }
-                                    // Delete
-                                    IconButton(onClick = { viewModel.deletePackage(pkg.name) }) {
-                                        Icon(
-                                            Icons.Outlined.Delete,
-                                            contentDescription = "删除",
-                                            tint = MaterialTheme.colorScheme.error
-                                        )
+                                    // Delete (hidden for built-in modules)
+                                    if (!viewModel.isBuiltInPackage(pkg.name)) {
+                                        IconButton(onClick = { viewModel.deletePackage(pkg.name) }) {
+                                            Icon(
+                                                Icons.Outlined.Delete,
+                                                contentDescription = "删除",
+                                                tint = MaterialTheme.colorScheme.error
+                                            )
+                                        }
                                     }
                                 }
                             }
