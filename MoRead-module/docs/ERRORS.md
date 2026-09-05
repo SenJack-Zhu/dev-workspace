@@ -71,6 +71,13 @@
 | 1 | 资源文件编码 | 中文乱码 / 资源找不到 | 新增资源文件时检查编码和路径 | 确保 UTF-8 编码，路径正确 |
 | 2 | Manifest 冲突 | `Manifest merger failed` | 新增权限 / Activity 时检查 AndroidManifest | 用 `tools:replace` 或合并配置 |
 
+### 5. JS 模块 / Rhino 引擎类
+
+| # | 错误类型 | 症状 | 检查方法 | 修复方式 |
+|---|---------|------|----------|----------|
+| 1 | 后行断言 `(?<=...)` / `(?<!...)` | `SyntaxError: Invalid quantifier ?` | 模块 JS 里用了 lookbehind 正则 | Rhino 不支持后行断言，改用占位符替换法 |
+| 2 | ES6+ 语法（箭头函数、let/const 等） | `SyntaxError` | 模块 JS 里用了 ES6 新语法 | Rhino ES6 模式支持有限，尽量用 ES5 写法 |
+
 ---
 
 ## 🗂️ 历史错误记录
@@ -108,6 +115,15 @@
 - **原因**：配置项数据结构变了，但 ViewModel 里还在用旧结构
 - **修复**：移除本地状态更新逻辑，UI 直接从 config 读取
 - **相关文件**：`app/src/main/java/com/mozhi/reader/feature/settings/ModuleSettingsViewModel.kt`
+
+### 2026-09-05 — 精校模块 Rhino 正则后行断言不兼容
+
+- **错误**：精校模块 JS 里用了后行断言 `(?<!\u2026)`，Rhino 引擎不支持
+- **症状**：`SyntaxError: Invalid quantifier ?`，模块加载失败，完全不工作
+- **原因**：Rhino（Mozilla 的 JS 引擎）对 ES2018+ 的正则特性支持有限，后行断言（lookbehind）直接报语法错
+- **修复**：用"占位符替换法"代替后行断言 — 先把不需要匹配的内容替换成占位符，做完替换后再还原
+- **经验**：写模块 JS 时，正则里别用 `(?<=...)` / `(?<!...)`，前行断言 `(?=...)` / `(?!...)` 是 OK 的
+- **相关文件**：`modules/text-proofread.js`
 
 ### 2026-09-04 — Hilt 依赖注入缺失
 

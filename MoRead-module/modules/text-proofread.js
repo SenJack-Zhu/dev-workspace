@@ -154,8 +154,13 @@ function normalizeEllipsis(text) {
     }
 
     // 单个省略号 → 双省略号（中文规范）
-    if (/(?<!\u2026)\u2026(?!\u2026)/.test(result)) {
-        result = result.replace(/(?<!\u2026)\u2026(?!\u2026)/g, "\u2026\u2026");
+    // 注意：Rhino 不支持后行断言，用替换法实现
+    // 先把双省略号替换成占位符，再把单省略号替换成双，最后还原占位符
+    if (/\u2026/.test(result)) {
+        var PLACEHOLDER = "\uE000\uE001"; // 私有区字符做占位符
+        result = result.replace(/\u2026\u2026/g, PLACEHOLDER);
+        result = result.replace(/\u2026/g, "\u2026\u2026");
+        result = result.replace(new RegExp(PLACEHOLDER, "g"), "\u2026\u2026");
         changed = true;
     }
 
