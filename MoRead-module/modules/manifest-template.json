@@ -1,0 +1,10 @@
+{
+    "name": "my-module",
+    "displayName": "我的模块",
+    "version": "1.0.0",
+    "author": "your-name",
+    "description": "模块描述：这个模块做什么",
+    "minAppVersion": "",
+    "hooks": ["tts.synthesize"],
+    "overwrite": true
+}

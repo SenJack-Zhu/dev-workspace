@@ -1,0 +1,44 @@
+reference/
+.downloads/
+.tools/
+.isolated-build/
+.gradle/
+.kotlin/
+local.properties
+*.iml
+.idea/
+build/
+app/build/
+captures/
+.tmp/
+*.jks
+*.keystore
+secrets.properties
+
+.claude/
+
+# ObjectBox JVM 单测运行时抽取的原生库
+app/objectbox-jni-*.dll
+app/objectbox-jni-*.so
+app/objectbox-jni-*.dylib
+# 注解处理器每次改模型都会留一份旧模型副本，default.json 本身已入库，副本不需要
+app/objectbox-models/*.json.bak
+
+# ---- 开源边界：以下内容只保留在本地，不进入公开仓库 ----
+# 维护者私有工作文档（新克隆中没有这些文件属正常）
+CLAUDE.md
+DECISIONS.md
+DEVELOPMENT_PLAN.md
+design/
+docs/CODE_MAP.md
+docs/COMPANION_PHASE3_HANDOFF.md
+.firecrawl/
+
+# 构建产物与发布材料（APK 一律通过 GitHub Release 分发）
+*.apk
+dist/
+
+# 发布签名：密钥与口令永不入库
+keys/
+keystore.properties
+.gradle-build/

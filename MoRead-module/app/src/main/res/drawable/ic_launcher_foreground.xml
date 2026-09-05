@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 用户提供的图标：从白色画布自动去边，并缩放到 adaptive icon 的 66dp 安全区。 -->
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@drawable/launcher_artwork"
+    android:gravity="center"
+    android:filter="true"
+    android:antialias="true" />

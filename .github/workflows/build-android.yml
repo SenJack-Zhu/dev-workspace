@@ -6,12 +6,12 @@ on:
     # 只在 NativeTavern-O 子目录有变动时触发构建（总仓库放其他项目不会触发）
     paths:
       - 'NativeTavern-O/**'
-      - '.github/workflows/**'
+      - '.github/workflows/build-android.yml'
   pull_request:
     branches: [ main ]
     paths:
       - 'NativeTavern-O/**'
-      - '.github/workflows/**'
+      - '.github/workflows/build-android.yml'
   workflow_dispatch:
     inputs:
       g_sub_ver:

@@ -1,0 +1,62 @@
+# ═══════════════════════════════════════════════════════════════
+# dev-workspace 根级 .gitignore
+# 多项目仓库通用排除规则。各子项目自带 .gitignore 处理项目级细节。
+# ═══════════════════════════════════════════════════════════════
+
+# ── IDE ─────────────────────────────────────────────────────────
+*.iml
+*.ipr
+*.iws
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ── 构建产物（所有子项目通用） ────────────────────────────────────
+**/build/
+**/.gradle/
+**/.kotlin/
+**/captures/
+**/.tmp/
+dist/
+*.apk
+*.aab
+*.aar
+
+# ── 密钥与签名（永不入库） ────────────────────────────────────────
+*.jks
+*.keystore
+**/local.properties
+**/secrets.properties
+**/keystore.properties
+keys/
+
+# ── Flutter/Dart（NativeTavern-O 用） ─────────────────────────────
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.packages
+**/.pub-cache/
+**/.pub/
+**/coverage/
+
+# ── Android（MoRead-module 用） ───────────────────────────────────
+**/app/debug/
+**/app/profile/
+**/app/release/
+**/objectbox-jni-*.dll
+**/objectbox-jni-*.so
+**/objectbox-jni-*.dylib
+**/objectbox-models/*.json.bak
+
+# ── 临时文件 ─────────────────────────────────────────────────────
+*.log
+*.tmp
+*.bak
+*.orig
+
+# ── AI 工具临时文件 ─────────────────────────────────────────────
+.claude/
+.firecrawl/

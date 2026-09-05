@@ -1,0 +1,17 @@
+{
+  "tts.endpoint": "",
+  "tts.apiKey": "",
+  "tts.model": "cosyvoice-v1",
+  "tts.defaultVoice": "alloy",
+  "tts.format": "mp3",
+  "edgeTts.bridgeUrl": "http://localhost:9880",
+  "edgeTts.voice": "zh-CN-XiaoxiaoNeural",
+  "edgeTts.rate": "+0%",
+  "edgeTts.pitch": "+0Hz",
+  "multitts.endpoint": "",
+  "multitts.port": "8080",
+  "multitts.defaultVoice": "",
+  "chunk.targetChars": "480",
+  "chunk.maxChars": "640",
+  "debug": "false"
+}
