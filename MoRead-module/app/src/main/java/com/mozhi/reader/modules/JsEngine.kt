@@ -106,7 +106,22 @@ class JsEngine @Inject constructor(
             rhinoContext!!.evaluateString(scope, source, scriptName, 1, null)
             true
         } catch (e: Exception) {
-            hookRegistry.log("[JsEngine] Error loading $scriptName: ${e.message}")
+            val detail = buildString {
+                append(e.message ?: "unknown error")
+                // Rhino 通常会在 message 里带行号，这里再补一下堆栈
+                if (e is org.mozilla.javascript.JavaScriptException) {
+                    val jsEx = e.value as? org.mozilla.javascript.NativeError
+                    if (jsEx != null) {
+                        append(" | line: ${jsEx.get("lineNumber", jsEx)}")
+                    }
+                }
+                // 附加最顶层堆栈，辅助定位
+                val stack = e.stackTrace
+                if (stack.isNotEmpty()) {
+                    append(" | at ${stack[0].fileName}:${stack[0].lineNumber}")
+                }
+            }
+            hookRegistry.log("[JsEngine] Error loading $scriptName: $detail")
             false
         }
     }
