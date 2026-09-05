@@ -108,11 +108,16 @@ class JsEngine @Inject constructor(
         } catch (e: Exception) {
             val detail = buildString {
                 append(e.message ?: "unknown error")
-                // Rhino 通常会在 message 里带行号，这里再补一下堆栈
+                // Rhino JavaScriptException 自带行号和源文件信息
                 if (e is org.mozilla.javascript.JavaScriptException) {
-                    val jsEx = e.value as? org.mozilla.javascript.NativeError
-                    if (jsEx != null) {
-                        append(" | line: ${jsEx.get("lineNumber", jsEx)}")
+                    val line = e.lineNumber()
+                    val src = e.sourceName()
+                    if (line > 0) append(" | line: $line")
+                    if (!src.isNullOrBlank()) append(" | source: $src")
+                    // 尝试从 details 里拿更多信息
+                    val details = e.details
+                    if (details != null && details !in e.message.orEmpty()) {
+                        append(" | details: $details")
                     }
                 }
                 // 附加最顶层堆栈，辅助定位
