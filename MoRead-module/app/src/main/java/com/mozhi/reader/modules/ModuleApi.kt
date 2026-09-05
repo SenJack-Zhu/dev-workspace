@@ -153,7 +153,7 @@ class ModuleApi @Inject constructor(
                         outputStream.use { it.write(body.toByteArray()) }
                     }
                 }
-                headers?.forEach { (k, v) -> setRequestProperty(k, v) }
+                headers?.forEach { k, v -> setRequestProperty(k, v) }
             }
             val code = conn.responseCode
             val respBody = if (code in 200..299) {

@@ -330,6 +330,7 @@ class ModuleImporter @Inject constructor(
         return try {
             context.contentResolver.openOutputStream(outputUri)?.use { out ->
                 zipDirectory(pkgDir, out)
+                true
             } ?: false
         } catch (e: Exception) {
             hookRegistry.log("[Exporter] Export failed: ${e.message}")
@@ -351,6 +352,7 @@ class ModuleImporter @Inject constructor(
                     addDirToZip(zos, pkgDir, pkgDir.name)
                 }
                 zos.close()
+                true
             } ?: false
         } catch (e: Exception) {
             hookRegistry.log("[Exporter] Export all failed: ${e.message}")

@@ -27,6 +27,7 @@ import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.Upload
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -49,6 +50,7 @@ import com.mozhi.reader.ui.components.MoReadRow
 import com.mozhi.reader.ui.components.MoReadRowDivider
 import com.mozhi.reader.ui.components.MoReadSection
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModuleSettingsScreen(
     onBack: () -> Unit,
