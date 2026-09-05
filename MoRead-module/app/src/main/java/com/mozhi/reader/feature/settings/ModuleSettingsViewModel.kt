@@ -396,14 +396,10 @@ class ModuleSettingsViewModel @Inject constructor(
     }
 
     fun setSettingValue(key: String, value: String) {
-        // Store in shared config via ModuleApi
-        // We use the importer's shared config mechanism
         viewModelScope.launch(Dispatchers.IO) {
             moduleImporter.setConfigValue(key, value)
-            // Update local state for immediate UI feedback
-            _packageSettings.value = _packageSettings.value.map {
-                if (it.key == key) it.copy(currentValue = value) else it
-            }
+            // No need to update local state — the UI reads current value
+            // directly from getConfigValue() on each render
         }
     }
 
