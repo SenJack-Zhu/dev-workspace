@@ -78,7 +78,7 @@ var Stats = {
 function loadAllKB() {
     try {
         var g = MoRead.storageGet(STORAGE_GLOBAL, "");
-        if (g) {
+        if (g && g.trim()) {
             var gd = JSON.parse(g);
             GlobalKB.properNouns = gd.properNouns || {};
             GlobalKB.characters = gd.characters || {};
@@ -89,20 +89,21 @@ function loadAllKB() {
     }
     try {
         var b = MoRead.storageGet(STORAGE_BOOKS, "");
-        if (b) BookKBs = JSON.parse(b);
+        if (b && b.trim()) BookKBs = JSON.parse(b);
     } catch (e) {
         MoRead.log("[SmartText] 本书知识库加载失败: " + e.message);
     }
     try {
         var p = MoRead.storageGet(STORAGE_PENDING, "");
-        if (p) pendingReview = JSON.parse(p);
+        if (p && p.trim()) pendingReview = JSON.parse(p);
     } catch (e) {}
     try {
         var s = MoRead.storageGet(STORAGE_STATS, "");
-        if (s) Stats = JSON.parse(s);
+        if (s && s.trim()) Stats = JSON.parse(s);
     } catch (e) {}
     try {
-        currentBookId = parseInt(MoRead.storageGet(STORAGE_CURRENT_BOOK, "0"), 10) || 0;
+        var cb = MoRead.storageGet(STORAGE_CURRENT_BOOK, "0");
+        currentBookId = parseInt(cb, 10) || 0;
     } catch (e) {}
 }
 

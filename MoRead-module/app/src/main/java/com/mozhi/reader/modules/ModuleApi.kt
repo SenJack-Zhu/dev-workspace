@@ -392,6 +392,14 @@ class ModuleApi @Inject constructor(
         reloadRequested = true
     }
 
+    /**
+     * 清除 config 和 storage 缓存（模块重载前调用）。
+     */
+    fun clearCaches() {
+        configCache = null
+        storageCache = null
+    }
+
     // ── Internal helpers ───────────────────────────────────────────
 
     private fun loadConfig() {

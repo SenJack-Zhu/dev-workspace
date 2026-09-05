@@ -1,5 +1,5 @@
 // ============================================================
-// 文本精校模块 (Text Proofread Module) v1.1.0
+// 文本精校模块 (Text Proofread Module) v1.1.1
 //
 // 注册两个 hook:
 //   - text.display:    修改显示的文本（阅读器渲染前）
@@ -17,6 +17,8 @@
 //   9. 常见错别字替换
 //  10. 自定义替换（支持普通替换和正则替换）
 // ============================================================
+
+try {
 
 var MODULE_NAME = "text-proofread";
 var changeCount = 0;
@@ -190,8 +192,10 @@ function collapseRepeatedPunctuation(text) {
     }
 
     // 重复的 ?! 混合 → 标准化为 ?!
-    if (/[!?]{3,}/.test(result)) {
-        result = result.replace(/[!?]{3,}/g, "?!");
+    // 注意：用 RegExp 构造，避免 Rhino 解释器模式下字符类中 ? 的解析问题
+    var qmRe = new RegExp("[!?]{3,}", "g");
+    if (new RegExp("[!?]{3,}").test(result)) {
+        result = result.replace(qmRe, "?!");
         changed = true;
     }
 
@@ -622,5 +626,9 @@ MoRead.hook("text.preprocess", function(params) {
     return result;
 });
 
-MoRead.log("文本精校模块 v1.1.0 加载完成");
+MoRead.log("文本精校模块 v1.1.1 加载完成");
 MoRead.log("已注册 hook: text.display, text.preprocess");
+
+} catch (e) {
+    MoRead.log("文本精校模块加载失败: " + e.message);
+}

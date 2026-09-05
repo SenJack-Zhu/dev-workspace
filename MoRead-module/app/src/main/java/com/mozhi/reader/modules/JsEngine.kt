@@ -137,6 +137,8 @@ class JsEngine @Inject constructor(
     fun restart() {
         shutdown()
         hookRegistry.clearAll()
+        // 清除 ModuleApi 缓存，确保模块重载时读到最新配置
+        moduleApi.clearCaches()
         initialize()
     }
 }
