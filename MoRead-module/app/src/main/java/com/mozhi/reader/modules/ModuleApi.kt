@@ -241,7 +241,7 @@ class ModuleApi @Inject constructor(
 
     // ── Misc ───────────────────────────────────────────────────────
 
-    fun getModuleDir(): String = moduleDir
+    fun moduleDirPath(): String = moduleDir
 
     fun getAppVersion(): String {
         return try {

@@ -74,7 +74,7 @@ class JsEngine @Inject constructor(
                     base64Decode: function(str) { return b.base64Decode(str); },
                     base64Encode: function(data) { return b.base64Encode(data); },
                     pcmToWav: function(b64, sr) { return b.pcmToWav(b64, sr || 24000); },
-                    getModuleDir: function() { return b.getModuleDir(); },
+                    getModuleDir: function() { return b.moduleDirPath(); },
                     getAppVersion: function() { return b.getAppVersion(); },
                     reload: function() { return b.reload(); }
                 };
