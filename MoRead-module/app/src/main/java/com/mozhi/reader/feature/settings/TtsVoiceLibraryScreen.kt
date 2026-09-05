@@ -1,6 +1,9 @@
 package com.mozhi.reader.feature.settings
 
 import android.media.MediaPlayer
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,6 +32,7 @@ import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Female
 import androidx.compose.material.icons.outlined.Male
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.PushPin
@@ -61,6 +65,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -172,6 +177,8 @@ class TtsVoiceLibraryViewModel @Inject constructor(
     fun setGenderFilter(value: String?) { genderFilter.value = value }
     fun dismissMessage() { message.value = null }
 
+    fun setMessage(msg: String) { message.value = msg }
+
     fun save(voice: TtsVoiceEntity) = viewModelScope.launch {
         runCatching { repository.save(voice) }
             .onSuccess { message.value = "音色已保存" }
@@ -266,12 +273,31 @@ fun TtsVoiceLibraryScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var editor by remember { mutableStateOf<TtsVoiceEntity?>(null) }
     var pendingDelete by remember { mutableStateOf<TtsVoiceEntity?>(null) }
     var showImport by remember { mutableStateOf(false) }
     var exportText by remember { mutableStateOf<String?>(null) }
     var topMenu by remember { mutableStateOf(false) }
+
+    // 文件导入 launcher
+    val fileImportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            val text = try {
+                context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+            } catch (e: Exception) {
+                null
+            }
+            if (text != null) {
+                viewModel.importJson(text)
+            } else {
+                viewModel.setMessage("文件读取失败")
+            }
+        }
+    }
 
     MoReadBackdrop {
         Column(
@@ -328,9 +354,17 @@ fun TtsVoiceLibraryScreen(
                         )
                         MoReadMenuDivider()
                         MoReadMenuItem(
-                            text = "从 JSON 导入",
+                            text = "从 JSON 导入（粘贴）",
                             icon = Icons.Outlined.Upload,
                             onClick = { topMenu = false; showImport = true }
+                        )
+                        MoReadMenuItem(
+                            text = "从 JSON 文件导入",
+                            icon = Icons.Outlined.Folder,
+                            onClick = {
+                                topMenu = false
+                                fileImportLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
+                            }
                         )
                         MoReadMenuItem(
                             text = "导出为 JSON",
