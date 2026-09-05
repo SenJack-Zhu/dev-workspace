@@ -1,7 +1,7 @@
 {
   "name": "smart-text",
   "displayName": "智能文本理解",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": "MoRead Modules",
   "description": "AI 辅助的自增长知识库，智能区分对话与专有名词，越读越准，最终可脱离 AI 纯规则运行",
   "settings": [
@@ -25,20 +25,34 @@
       "default": "off"
     },
     {
+      "key": "aiProvider",
+      "label": "AI 供应商",
+      "type": "select",
+      "options": "native|使用 App 内置 AI（推荐）,custom|自定义 HTTP 接口",
+      "default": "native"
+    },
+    {
+      "key": "aiRole",
+      "label": "使用的模型档位（仅内置 AI）",
+      "type": "select",
+      "options": "CHEAP|经济档（默认）,SMART|智能档,CHAT|聊天档,SUGGESTION|建议档",
+      "default": "CHEAP"
+    },
+    {
       "key": "aiEndpoint",
-      "label": "AI API 端点（OpenAI 兼容）",
+      "label": "[自定义] AI API 端点",
       "type": "string",
       "default": ""
     },
     {
       "key": "aiApiKey",
-      "label": "AI API Key",
+      "label": "[自定义] AI API Key",
       "type": "string",
       "default": ""
     },
     {
       "key": "aiModel",
-      "label": "AI 模型名称",
+      "label": "[自定义] AI 模型名称",
       "type": "string",
       "default": "gpt-4o-mini"
     }

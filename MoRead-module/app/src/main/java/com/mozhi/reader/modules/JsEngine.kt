@@ -75,6 +75,8 @@ class JsEngine @Inject constructor(
                     base64Decode: function(str) { return b.base64Decode(str); },
                     base64Encode: function(data) { return b.base64Encode(data); },
                     pcmToWav: function(b64, sr) { return b.pcmToWav(b64, sr || 24000); },
+                    aiChat: function(system, user, role) { return b.aiChat(system || '', user || '', role || null); },
+                    aiChatJSON: function(messages, role) { return b.aiChatJSON(messages || '[]', role || null); },
                     getModuleDir: function() { return b.moduleDirPath(); },
                     getAppVersion: function() { return b.getAppVersion(); },
                     reload: function() { return b.reload(); }

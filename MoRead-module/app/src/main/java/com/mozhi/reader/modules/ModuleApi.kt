@@ -2,9 +2,14 @@ package com.mozhi.reader.modules
 
 import android.content.Context
 import android.content.pm.PackageManager
+import com.mozhi.reader.ai.client.AiClientFactory
+import com.mozhi.reader.ai.client.ChatMessage
+import com.mozhi.reader.ai.client.ChatRole
+import com.mozhi.reader.core.database.entity.ModelRole
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.mozilla.javascript.Context as RhinoContext
 import org.mozilla.javascript.Function
@@ -21,7 +26,8 @@ import org.mozilla.javascript.ScriptableObject
 @Singleton
 class ModuleApi @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val hookRegistry: HookRegistry
+    private val hookRegistry: HookRegistry,
+    private val aiClientFactory: AiClientFactory
 ) {
     companion object {
         val currentModuleName = ThreadLocal<String>()
@@ -166,6 +172,76 @@ class ModuleApi @Inject constructor(
             HttpResult(code, respBody, code in 200..299, jsonStr)
         } catch (e: Exception) {
             hookRegistry.log("[HTTP] $method $url error: ${e.message}")
+            null
+        }
+    }
+
+    // ── AI chat (reuses native AI providers) ──────────────────────
+
+    /**
+     * JS: MoRead.aiChat(systemPrompt, userMessage, role) → String?
+     *
+     * 调用原生配置好的 AI 供应商，复用所有 API Key、模型设置。
+     * role: "CHEAP"（默认）/ "SMART" / "CHAT" / "SUGGESTION"
+     * 返回 AI 回复文本，失败返回 null。
+     */
+    fun aiChat(systemPrompt: String, userMessage: String, role: String?): String? {
+        val modelRole = try {
+            ModelRole.valueOf(role?.uppercase() ?: "CHEAP")
+        } catch (_: Exception) {
+            ModelRole.CHEAP
+        }
+        return try {
+            runBlocking {
+                val resolved = aiClientFactory.forRole(modelRole)
+                val messages = listOf(
+                    ChatMessage(ChatRole.SYSTEM, systemPrompt),
+                    ChatMessage(ChatRole.USER, userMessage)
+                )
+                resolved.client.chat(messages, resolved.options)
+            }
+        } catch (e: Exception) {
+            val moduleName = currentModuleName.get() ?: "unknown"
+            hookRegistry.log("[Module:$moduleName] aiChat error: ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * JS: MoRead.aiChatJSON(messagesJSON, role) → String?
+     *
+     * 支持多轮对话的版本，messagesJSON 是 JSON 数组：
+     * [{"role":"system","content":"..."},{"role":"user","content":"..."}]
+     * role 同上。
+     */
+    fun aiChatJSON(messagesJSON: String, role: String?): String? {
+        val modelRole = try {
+            ModelRole.valueOf(role?.uppercase() ?: "CHEAP")
+        } catch (_: Exception) {
+            ModelRole.CHEAP
+        }
+        return try {
+            val arr = org.json.JSONArray(messagesJSON)
+            val messages = mutableListOf<ChatMessage>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                val roleStr = obj.optString("role", "user").uppercase()
+                val content = obj.optString("content", "")
+                val chatRole = when (roleStr) {
+                    "SYSTEM" -> ChatRole.SYSTEM
+                    "ASSISTANT" -> ChatRole.ASSISTANT
+                    "TOOL" -> ChatRole.TOOL
+                    else -> ChatRole.USER
+                }
+                messages.add(ChatMessage(chatRole, content))
+            }
+            runBlocking {
+                val resolved = aiClientFactory.forRole(modelRole)
+                resolved.client.chat(messages, resolved.options)
+            }
+        } catch (e: Exception) {
+            val moduleName = currentModuleName.get() ?: "unknown"
+            hookRegistry.log("[Module:$moduleName] aiChatJSON error: ${e.message}")
             null
         }
     }

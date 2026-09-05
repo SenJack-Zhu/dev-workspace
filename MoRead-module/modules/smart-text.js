@@ -456,47 +456,65 @@ function aiAnalyzeChapter(text, bookId, chapterIndex) {
     if (mode === "off" || mode === "rules") return;
     if (mode !== "chapter") return; // 目前只实现逐章模式
 
-    var endpoint = cfg("aiEndpoint", "");
-    var apiKey = cfg("aiApiKey", "");
-    var model = cfg("aiModel", "gpt-4o-mini");
-
-    if (!endpoint || !apiKey) return;
+    var provider = cfg("aiProvider", "native");
 
     // 每章取前 2000 字
     var sample = text.substring(0, Math.min(2000, text.length));
     if (sample.length < 100) return;
 
-    var prompt = "分析下面的小说片段，提取专有名词和人物角色。\n" +
-        "返回 JSON 格式：{\"properNouns\": [{\"term\":\"XXX\",\"type\":\"person|place|organization|title|other\",\"confidence\":0.8}], \"characters\": [{\"name\":\"XXX\",\"role\":\"角色身份\",\"confidence\":0.8}] }\n" +
+    var systemPrompt = "你是小说文本分析专家。分析下面的小说片段，提取专有名词和人物角色。\n" +
+        "只返回 JSON 格式：{\"properNouns\": [{\"term\":\"XXX\",\"type\":\"person|place|organization|title|other\",\"confidence\":0.8}], \"characters\": [{\"name\":\"XXX\",\"role\":\"角色身份\",\"confidence\":0.8}] }\n" +
         "type：person(人名) place(地名) organization(门派/组织/公司) title(书名/功法/宝物) other(其他)\n" +
-        "只提取你比较确定的，confidence 0-1。\n\n" +
-        "片段：\n" + sample;
+        "只提取你比较确定的，confidence 0-1。";
 
-    var body = JSON.stringify({
-        model: model,
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.3,
-        response_format: { type: "json_object" }
-    });
+    var userPrompt = "片段：\n" + sample;
 
-    var headers = {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer " + apiKey
-    };
-
-    var baseUrl = endpoint.replace(/\/+$/, "");
-    var url = baseUrl + "/v1/chat/completions";
+    var content = null;
 
     try {
-        var resp = MoRead.httpPost(url, body, "application/json", headers);
-        if (!resp || !resp.ok) {
-            MoRead.log("[SmartText] AI 调用失败: HTTP " + (resp ? resp.status : "no response"));
-            return;
+        if (provider === "native") {
+            // 使用原生配置好的 AI（推荐，自动复用所有供应商）
+            var aiRole = cfg("aiRole", "CHEAP");
+            content = MoRead.aiChat(systemPrompt, userPrompt, aiRole);
+        } else {
+            // 自定义 HTTP 模式（兼容旧版）
+            var endpoint = cfg("aiEndpoint", "");
+            var apiKey = cfg("aiApiKey", "");
+            var model = cfg("aiModel", "gpt-4o-mini");
+            if (!endpoint || !apiKey) return;
+
+            var body = JSON.stringify({
+                model: model,
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: userPrompt }
+                ],
+                temperature: 0.3,
+                response_format: { type: "json_object" }
+            });
+
+            var headers = {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + apiKey
+            };
+
+            var baseUrl = endpoint.replace(/\/+$/, "");
+            var url = baseUrl + "/v1/chat/completions";
+
+            var resp = MoRead.httpPost(url, body, "application/json", headers);
+            if (!resp || !resp.ok) {
+                MoRead.log("[SmartText] AI 调用失败: HTTP " + (resp ? resp.status : "no response"));
+                return;
+            }
+
+            var data = JSON.parse(resp.body);
+            content = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
         }
 
-        var data = JSON.parse(resp.body);
-        var content = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-        if (!content) return;
+        if (!content) {
+            MoRead.log("[SmartText] AI 返回为空");
+            return;
+        }
 
         var result = JSON.parse(content);
         var learned = 0;
