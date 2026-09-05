@@ -1,0 +1,21 @@
+{
+  "name": "tts-enhance",
+  "displayName": "TTS 增强",
+  "version": "1.0.0",
+  "author": "MoRead",
+  "description": "TTS 增强模块：自定义 TTS 端点、自定义音色列表、自定义句子断句规则，全面掌控听书体验。",
+  "settings": [
+    {"key": "enableCustomTTS", "label": "启用自定义 TTS 端点", "type": "bool", "default": "false"},
+    {"key": "ttsEndpoint", "label": "TTS 服务地址（OpenAI 兼容格式）", "type": "string", "default": "http://localhost:8080"},
+    {"key": "ttsApiKey", "label": "API Key（可选）", "type": "string", "default": ""},
+    {"key": "ttsModel", "label": "模型名称", "type": "string", "default": "cosyvoice-v1"},
+    {"key": "ttsDefaultVoice", "label": "默认音色 ID", "type": "string", "default": "alloy"},
+    {"key": "ttsFormat", "label": "音频格式（mp3/wav/pcm）", "type": "string", "default": "mp3"},
+    {"key": "enableCustomVoices", "label": "启用自定义音色列表", "type": "bool", "default": "false"},
+    {"key": "customVoices", "label": "自定义音色（JSON 数组）", "type": "string", "default": "[{\"voiceId\":\"alloy\",\"displayName\":\"合金男声\",\"gender\":\"MALE\",\"tags\":\"通用\"}]"},
+    {"key": "enableCustomSegmenter", "label": "启用自定义句子断句", "type": "bool", "default": "false"},
+    {"key": "segmentMaxChars", "label": "单句最大字符数", "type": "string", "default": "96"},
+    {"key": "segmentTerminators", "label": "终止标点（字符串）", "type": "string", "default": "。！？!?…；;"},
+    {"key": "segmentSoftBreaks", "label": "次级停顿标点（超长句在此切分）", "type": "string", "default": "，,、：: 　"}
+  ]
+}
