@@ -151,14 +151,23 @@ function initCustomTTS() {
             if (!text) return null;
 
             // 收集所有变量
+            var speedVal = p.speed || 1.0;
+            var volumeVal = p.volume || 1.0;
+            var pitchVal = p.pitch || 1.0;
             var vars = {
                 text: encodeURIComponent(text),
                 rawText: text,
                 voice: encodeURIComponent(p.voice || ""),
                 rawVoice: p.voice || "",
-                speed: p.speed || 1.0,
-                volume: p.volume || 1.0,
-                pitch: p.pitch || 1.0,
+                speed: speedVal,
+                speed100: Math.round(speedVal * 100),
+                speedInt: Math.round(speedVal),
+                volume: volumeVal,
+                volume100: Math.round(volumeVal * 100),
+                volumeInt: Math.round(volumeVal),
+                pitch: pitchVal,
+                pitch100: Math.round(pitchVal * 100),
+                pitchInt: Math.round(pitchVal),
                 model: encodeURIComponent(p.model || ""),
                 rawModel: p.model || "",
                 format: p.responseFormat || "mp3"
