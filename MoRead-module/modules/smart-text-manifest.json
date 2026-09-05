@@ -1,0 +1,20 @@
+{
+  "name": "smart-text",
+  "displayName": "智能文本理解",
+  "version": "0.1.0",
+  "author": "MoRead",
+  "description": "AI 驱动的智能文本理解模块：自动识别专有名词、对话/引用区分、角色识别。支持逐章学习模式，越读越准，最终可脱离 AI 纯规则运行。",
+  "settings": [
+    {"key": "aiMode", "label": "AI 学习模式", "type": "string", "default": "chapter"},
+    {"key": "aiEndpoint", "label": "AI 服务地址（OpenAI 兼容）", "type": "string", "default": ""},
+    {"key": "aiApiKey", "label": "AI API Key", "type": "string", "default": ""},
+    {"key": "aiModel", "label": "AI 模型", "type": "string", "default": "gpt-4o-mini"},
+    {"key": "enableDialogueSegment", "label": "启用智能对白切分", "type": "bool", "default": "true"},
+    {"key": "enableTextDisplay", "label": "启用智能显示标注", "type": "bool", "default": "false"},
+    {"key": "enableTextPreprocess", "label": "启用 TTS 文本优化", "type": "bool", "default": "true"},
+    {"key": "enableSentenceSegment", "label": "启用智能断句", "type": "bool", "default": "false"},
+    {"key": "autoConfirmThreshold", "label": "自动确认置信度阈值（0-1）", "type": "string", "default": "0.85"},
+    {"key": "knowledgeCategory", "label": "知识库题材分类", "type": "string", "default": "general"},
+    {"key": "highlightProperNouns", "label": "显示时高亮专有名词", "type": "bool", "default": "false"}
+  ]
+}
