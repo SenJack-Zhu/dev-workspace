@@ -15,6 +15,7 @@ import com.mozhi.reader.core.datastore.ReaderTextReplacementRule
 import com.mozhi.reader.core.datastore.compileRegex
 import com.mozhi.reader.core.datastore.validationError
 import com.mozhi.reader.core.vector.VectorQueries
+import com.mozhi.reader.modules.HookRegistry
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.objectbox.BoxStore
 import java.io.File
@@ -58,7 +59,8 @@ class LibraryRepository @Inject constructor(
     private val textWriter: BookTextWriter,
     private val mediaStore: BookMediaStore,
     private val layoutStore: BookLayoutStore,
-    private val vectorStore: dagger.Lazy<BoxStore>
+    private val vectorStore: dagger.Lazy<BoxStore>,
+    private val hookRegistry: HookRegistry
 ) {
     fun observeBooks(): Flow<List<BookEntity>> = bookDao.observeBooks()
 
@@ -379,8 +381,15 @@ class LibraryRepository @Inject constructor(
         bookDao.updateTextVersion(bookId, CURRENT_TEXT_VERSION)
     }
 
-    suspend fun readChapterText(bookId: Long, chapter: ChapterEntity): String =
-        textStore.readChapter(bookId, chapter.textByteOffset, chapter.textByteLength)
+    suspend fun readChapterText(bookId: Long, chapter: ChapterEntity): String {
+        val raw = textStore.readChapter(bookId, chapter.textByteOffset, chapter.textByteLength)
+        return hookRegistry.call("text.display", mapOf(
+            "text" to raw,
+            "bookId" to bookId,
+            "chapterIndex" to chapter.chapterIndex,
+            "chapterTitle" to chapter.title
+        ), raw)
+    }
 
     suspend fun getBookmarks(bookId: Long): List<BookmarkEntity> = bookDao.getBookmarks(bookId)
 

@@ -34,6 +34,7 @@ import com.mozhi.reader.core.speech.TtsEngineMode
 import com.mozhi.reader.core.speech.TtsSettings
 import com.mozhi.reader.core.speech.TtsSettingsStore
 import com.mozhi.reader.core.speech.TtsSynthesisGranularity
+import com.mozhi.reader.modules.HookRegistry
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import javax.inject.Inject
@@ -99,7 +100,8 @@ class ListenEngine @Inject constructor(
     private val ttsSettingsStore: TtsSettingsStore,
     private val systemTtsSpeaker: SystemTtsSpeaker,
     private val mediaService: AiMediaGenerationService,
-    private val audiobookRepository: AudiobookRepository
+    private val audiobookRepository: AudiobookRepository,
+    private val hookRegistry: HookRegistry
 ) {
     private data class Utterance(
         val start: Int,
@@ -569,6 +571,11 @@ class ListenEngine @Inject constructor(
             .replace('\uFFFC', ' ')
             .trim()
         if (text.isEmpty()) return@mapNotNull null
+        val processed = hookRegistry.call("text.preprocess", mapOf(
+            "text" to text,
+            "roleName" to role.name,
+            "engine" to (if (role.engine == AudiobookEngine.SYSTEM.name) "system" else "ai")
+        ), text)
         val engine = if (role.engine == AudiobookEngine.SYSTEM.name) {
             TtsEngineMode.SYSTEM
         } else {
@@ -577,7 +584,7 @@ class ListenEngine @Inject constructor(
         Utterance(
             start = start,
             end = end,
-            text = text,
+            text = processed,
             engineMode = engine,
             voiceId = role.voiceId.takeIf(String::isNotBlank),
             emotion = segment.emotion,
@@ -602,7 +609,13 @@ class ListenEngine @Inject constructor(
             val text = purifyForListening(body, start, span.end, rules).text
                 .replace('\uFFFC', ' ')
                 .trim()
-            if (text.isNotEmpty()) result += Utterance(start, span.end, text)
+            if (text.isNotEmpty()) {
+                val processed = hookRegistry.call("text.preprocess", mapOf(
+                    "text" to text,
+                    "engine" to "system"
+                ), text)
+                result += Utterance(start, span.end, processed)
+            }
         }
         return result
     }
