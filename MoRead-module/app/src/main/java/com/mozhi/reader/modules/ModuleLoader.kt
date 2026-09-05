@@ -4,29 +4,16 @@ import android.content.Context
 import javax.inject.Inject
 import javax.inject.Singleton
 import dagger.hilt.android.qualifiers.ApplicationContext
+import org.json.JSONObject
 import java.io.File
 
 /**
  * Scans the modules directory (internal storage) and loads all .js files.
  *
- * Directory structure:
- * ```
- * context.filesDir/modules/
- *   ├── config.json           (shared config, merged from all packages)
- *   ├── storage.json          (shared persistent storage)
- *   ├── <package-name>/
- *   │   ├── manifest.json     (package metadata)
- *   │   ├── *.js              (JavaScript module files)
- *   │   └── config.json      (package-specific config, merged at import time)
- *   └── <package-name>/
- *       ├── manifest.json
- *       └── *.js
- * ```
- *
- * Modules are loaded from all package subdirectories, sorted by package name
- * then file name. This ensures deterministic loading order across reloads.
- *
- * Also supports hot-reload: re-scan, re-evaluate all modules without restarting the app.
+ * Supports:
+ * - Master switch (modulesEnabled in config.json)
+ * - Per-package enable/disable (packageEnabled map in config.json)
+ * - Hot-reload: re-scan and re-evaluate all modules without restarting
  */
 @Singleton
 class ModuleLoader @Inject constructor(
@@ -34,19 +21,66 @@ class ModuleLoader @Inject constructor(
     private val jsEngine: JsEngine,
     private val hookRegistry: HookRegistry
 ) {
-    /** Root modules directory in internal storage. */
     private val moduleDir: File by lazy {
         File(context.filesDir, "modules").also { it.mkdirs() }
     }
 
+    private val configFile: File by lazy { File(moduleDir, "config.json") }
+
     private val loadedModules = mutableListOf<String>()
 
-    /**
-     * Load all .js modules from all package subdirectories.
-     * Called at app startup or when user triggers "Reload Modules".
-     */
+    // ── Enable/disable state ───────────────────────────────────────
+
+    fun isModulesEnabled(): Boolean {
+        return loadConfig().optBoolean("modulesEnabled", true)
+    }
+
+    fun setModulesEnabled(enabled: Boolean) {
+        val config = loadConfig()
+        config.put("modulesEnabled", enabled)
+        saveConfig(config)
+    }
+
+    fun isPackageEnabled(packageName: String): Boolean {
+        val config = loadConfig()
+        val map = config.optJSONObject("packageEnabled")
+        return map?.optBoolean(packageName, true) ?: true
+    }
+
+    fun setPackageEnabled(packageName: String, enabled: Boolean) {
+        val config = loadConfig()
+        var map = config.optJSONObject("packageEnabled")
+        if (map == null) {
+            map = JSONObject()
+            config.put("packageEnabled", map)
+        }
+        map.put(packageName, enabled)
+        saveConfig(config)
+    }
+
+    private fun loadConfig(): JSONObject {
+        return if (configFile.exists()) {
+            try { JSONObject(configFile.readText()) } catch (_: Exception) { JSONObject() }
+        } else JSONObject()
+    }
+
+    private fun saveConfig(config: JSONObject) {
+        configFile.writeText(config.toString())
+    }
+
+    // ── Loading ───────────────────────────────────────────────────
+
     @Synchronized
     fun loadAll(): LoadResult {
+        // Check master switch
+        if (!isModulesEnabled()) {
+            jsEngine.restart()
+            hookRegistry.clearAll()
+            loadedModules.clear()
+            hookRegistry.log("[ModuleLoader] Module system disabled by master switch")
+            return LoadResult(0, "模块系统已关闭，全部使用原生功能")
+        }
+
         // Restart JS engine to clear all previous state
         jsEngine.restart()
 
@@ -56,7 +90,7 @@ class ModuleLoader @Inject constructor(
             return LoadResult(0, "Module directory created in internal storage")
         }
 
-        // Scan for .js files in the root and all subdirectories
+        // Scan for .js files in all package subdirectories
         val jsFiles = collectJsFiles(moduleDir)
 
         if (jsFiles.isEmpty()) {
@@ -66,15 +100,29 @@ class ModuleLoader @Inject constructor(
 
         loadedModules.clear()
         var successCount = 0
+        var skippedCount = 0
 
         for (file in jsFiles) {
             val moduleName = file.nameWithoutExtension
-            // Include package name to disambiguate modules with same filename
             val relPath = moduleDir.toURI().relativize(file.toURI()).path
             val fullName = if (relPath.contains("/")) {
                 relPath.removeSuffix(".js").replace("/", "/")
             } else {
                 moduleName
+            }
+
+            // Extract package name from relPath (e.g. "pkg-name/file.js" → "pkg-name")
+            val pkgName = if (relPath.contains("/")) {
+                relPath.substringBefore("/")
+            } else {
+                moduleName
+            }
+
+            // Check per-package switch
+            if (!isPackageEnabled(pkgName)) {
+                skippedCount++
+                hookRegistry.log("[ModuleLoader] Skipped (disabled): $fullName")
+                continue
             }
 
             ModuleApi.currentModuleName.set(moduleName)
@@ -91,29 +139,25 @@ class ModuleLoader @Inject constructor(
 
         ModuleApi.currentModuleName.remove()
 
-        val message = "Loaded $successCount/${jsFiles.size} modules"
+        val message = buildString {
+            append("Loaded $successCount modules")
+            if (skippedCount > 0) append(", $skippedCount disabled")
+        }
         hookRegistry.log("[ModuleLoader] $message")
         hookRegistry.log("[ModuleLoader] Registered hooks:\n${hookRegistry.summary()}")
 
         return LoadResult(successCount, message)
     }
 
-    /**
-     * Collect all .js files from the root directory and all subdirectories,
-     * sorted by relative path for deterministic loading order.
-     */
     private fun collectJsFiles(dir: File): List<File> {
         val files = mutableListOf<File>()
 
-        // Direct .js files in the root (legacy support)
         dir.listFiles { _, name -> name.endsWith(".js") }?.let {
             files.addAll(it)
         }
 
-        // .js files in subdirectories (each subdirectory = one package)
         dir.listFiles { file -> file.isDirectory }?.forEach { pkgDir ->
             pkgDir.listFiles { _, name -> name.endsWith(".js") }?.forEach { jsFile ->
-                // Only add if not already in the list (avoid duplicates)
                 if (files.none { it.absolutePath == jsFile.absolutePath }) {
                     files.add(jsFile)
                 }
@@ -123,15 +167,10 @@ class ModuleLoader @Inject constructor(
         return files.sortedBy { it.absolutePath }
     }
 
-    /**
-     * Reload a single module by name (or relative path).
-     */
     @Synchronized
     fun reloadModule(moduleName: String): Boolean {
-        // Try direct file first
         var file = File(moduleDir, "$moduleName.js")
         if (!file.exists()) {
-            // Try in subdirectories
             moduleDir.listFiles { f -> f.isDirectory }?.forEach { pkgDir ->
                 val candidate = File(pkgDir, "$moduleName.js")
                 if (candidate.exists()) {
@@ -153,24 +192,12 @@ class ModuleLoader @Inject constructor(
         return success
     }
 
-    /**
-     * Get list of loaded module names.
-     */
     fun getLoadedModules(): List<String> = loadedModules.toList()
 
-    /**
-     * Get the module directory path (internal storage).
-     */
     fun getModuleDir(): String = moduleDir.absolutePath
 
-    /**
-     * Check if a reload was requested by a module (via MoRead.reload()).
-     */
     fun isReloadRequested(): Boolean = ModuleApi.reloadRequested
 
-    /**
-     * Clear reload flag.
-     */
     fun clearReloadFlag() { ModuleApi.reloadRequested = false }
 
     data class LoadResult(

@@ -11,6 +11,7 @@ import com.mozhi.reader.modules.HookRegistry
 import com.mozhi.reader.modules.ModuleImporter
 import com.mozhi.reader.modules.ModuleLoader
 import dagger.hilt.android.lifecycle.HiltViewModel
+import org.json.JSONObject
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,6 +38,24 @@ class ModuleSettingsViewModel @Inject constructor(
 
     private val _logs = MutableStateFlow<List<String>>(emptyList())
     val logs: StateFlow<List<String>> = _logs.asStateFlow()
+
+    // ── Master switch ──────────────────────────────────────────────
+
+    private val _modulesEnabled = MutableStateFlow(true)
+    val modulesEnabled: StateFlow<Boolean> = _modulesEnabled.asStateFlow()
+
+    // ── Per-package enabled map ────────────────────────────────────
+
+    private val _packageEnabled = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+    val packageEnabled: StateFlow<Map<String, Boolean>> = _packageEnabled.asStateFlow()
+
+    // ── Multi-select state ─────────────────────────────────────────
+
+    private val _multiSelectMode = MutableStateFlow(false)
+    val multiSelectMode: StateFlow<Boolean> = _multiSelectMode.asStateFlow()
+
+    private val _selectedPackages = MutableStateFlow<Set<String>>(emptySet())
+    val selectedPackages: StateFlow<Set<String>> = _selectedPackages.asStateFlow()
 
     // ── File viewer state ──────────────────────────────────────────
 
@@ -66,6 +85,14 @@ class ModuleSettingsViewModel @Inject constructor(
     private val _pendingExportLogs = MutableStateFlow(false)
     val pendingExportLogs: StateFlow<Boolean> = _pendingExportLogs.asStateFlow()
 
+    // ── Package settings (manifest-declared UI) ───────────────────
+
+    private val _viewingSettingsPackage = MutableStateFlow<String?>(null)
+    val viewingSettingsPackage: StateFlow<String?> = _viewingSettingsPackage.asStateFlow()
+
+    private val _packageSettings = MutableStateFlow<List<Pair<String, JSONObject>>>(emptyList())
+    val packageSettings: StateFlow<List<Pair<String, JSONObject>>> = _packageSettings.asStateFlow()
+
     val moduleDirPath: String get() = moduleImporter.moduleDir.absolutePath
     val packageName: String get() = app.packageName
 
@@ -76,7 +103,110 @@ class ModuleSettingsViewModel @Inject constructor(
     fun refresh() {
         _packages.value = moduleImporter.listPackages()
         _logs.value = hookRegistry.getLogs()
+        _modulesEnabled.value = moduleLoader.isModulesEnabled()
+        _packageEnabled.value = _packages.value.associate { pkg ->
+            pkg.name to moduleLoader.isPackageEnabled(pkg.name)
+        }
     }
+
+    // ── Master switch ──────────────────────────────────────────────
+
+    fun setModulesEnabled(enabled: Boolean) {
+        moduleLoader.setModulesEnabled(enabled)
+        _modulesEnabled.value = enabled
+        if (enabled) {
+            reloadAll()
+        } else {
+            viewModelScope.launch(Dispatchers.IO) {
+                _isLoading.value = true
+                val result = moduleLoader.loadAll()
+                _message.value = result.message
+                refresh()
+                _isLoading.value = false
+            }
+        }
+    }
+
+    // ── Per-package switch ─────────────────────────────────────────
+
+    fun setPackageEnabled(packageName: String, enabled: Boolean) {
+        moduleLoader.setPackageEnabled(packageName, enabled)
+        _packageEnabled.value = _packageEnabled.value.toMutableMap().apply {
+            put(packageName, enabled)
+        }
+        reloadAll()
+    }
+
+    // ── Multi-select ───────────────────────────────────────────────
+
+    fun toggleMultiSelectMode() {
+        _multiSelectMode.value = !_multiSelectMode.value
+        if (!_multiSelectMode.value) {
+            _selectedPackages.value = emptySet()
+        }
+    }
+
+    fun togglePackageSelection(packageName: String) {
+        _selectedPackages.value = _selectedPackages.value.toMutableSet().apply {
+            if (contains(packageName)) remove(packageName) else add(packageName)
+        }
+    }
+
+    fun selectAllPackages() {
+        _selectedPackages.value = _packages.value.map { it.name }.toSet()
+    }
+
+    fun deselectAllPackages() {
+        _selectedPackages.value = emptySet()
+    }
+
+    fun batchEnable() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _isLoading.value = true
+            _selectedPackages.value.forEach { pkg ->
+                moduleLoader.setPackageEnabled(pkg, true)
+            }
+            val result = moduleLoader.loadAll()
+            _message.value = "已启用 ${_selectedPackages.value.size} 个模块\n${result.message}"
+            _multiSelectMode.value = false
+            _selectedPackages.value = emptySet()
+            refresh()
+            _isLoading.value = false
+        }
+    }
+
+    fun batchDisable() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _isLoading.value = true
+            _selectedPackages.value.forEach { pkg ->
+                moduleLoader.setPackageEnabled(pkg, false)
+            }
+            val result = moduleLoader.loadAll()
+            _message.value = "已禁用 ${_selectedPackages.value.size} 个模块\n${result.message}"
+            _multiSelectMode.value = false
+            _selectedPackages.value = emptySet()
+            refresh()
+            _isLoading.value = false
+        }
+    }
+
+    fun batchDelete() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _isLoading.value = true
+            var deleted = 0
+            _selectedPackages.value.forEach { pkg ->
+                if (moduleImporter.deletePackage(pkg)) deleted++
+            }
+            moduleLoader.loadAll()
+            _message.value = "已删除 $deleted 个模块包"
+            _multiSelectMode.value = false
+            _selectedPackages.value = emptySet()
+            refresh()
+            _isLoading.value = false
+        }
+    }
+
+    // ── Import / Reload / Delete ──────────────────────────────────
 
     fun importModule(uri: Uri) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -115,24 +245,14 @@ class ModuleSettingsViewModel @Inject constructor(
 
     // ── Export ─────────────────────────────────────────────────────
 
-    /**
-     * Request to export a single package. Triggers SAF file picker.
-     * The UI calls [exportPackageToUri] with the chosen URI.
-     */
     fun requestExportPackage(packageName: String) {
         _pendingExportPackage.value = packageName
     }
 
-    /**
-     * Request to export all packages. Triggers SAF file picker.
-     */
     fun requestExportAll() {
         _pendingExportAll.value = true
     }
 
-    /**
-     * Actually export the pending package to the chosen URI.
-     */
     fun exportPackageToUri(uri: Uri) {
         val packageName = _pendingExportPackage.value
         _pendingExportPackage.value = null
@@ -141,28 +261,17 @@ class ModuleSettingsViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             _isLoading.value = true
             val success = moduleImporter.exportPackage(packageName, uri)
-            _message.value = if (success) {
-                "已导出模块包：$packageName.mrm"
-            } else {
-                "导出失败：$packageName"
-            }
+            _message.value = if (success) "已导出模块包：$packageName.mrm" else "导出失败：$packageName"
             _isLoading.value = false
         }
     }
 
-    /**
-     * Actually export all packages to the chosen URI.
-     */
     fun exportAllToUri(uri: Uri) {
         _pendingExportAll.value = false
         viewModelScope.launch(Dispatchers.IO) {
             _isLoading.value = true
             val success = moduleImporter.exportAllPackages(uri)
-            _message.value = if (success) {
-                "已导出全部模块包"
-            } else {
-                "导出失败"
-            }
+            _message.value = if (success) "已导出全部模块包" else "导出失败"
             _isLoading.value = false
         }
     }
@@ -205,11 +314,8 @@ class ModuleSettingsViewModel @Inject constructor(
             _isLoading.value = true
             val saved = moduleImporter.writePackageFile(packageName, file.relativePath, _editingContent.value)
             if (saved) {
-                // Refresh file list and viewing content
                 _packageFiles.value = moduleImporter.listFilesInPackage(packageName)
                 _viewingFile.value = _viewingFile.value?.copy(content = _editingContent.value)
-
-                // Hot-reload: re-execute all modules so the edited code takes effect immediately
                 val loadResult = moduleLoader.loadAll()
                 _message.value = "已保存：${file.name}\n${loadResult.message}"
             } else {
@@ -272,5 +378,49 @@ class ModuleSettingsViewModel @Inject constructor(
             }
             _isLoading.value = false
         }
+    }
+
+    // ── Package settings (manifest-declared UI) ───────────────────
+
+    fun openPackageSettings(packageName: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val settings = moduleImporter.getPackageSettings(packageName)
+            _viewingSettingsPackage.value = packageName
+            _packageSettings.value = settings
+        }
+    }
+
+    fun closePackageSettings() {
+        _viewingSettingsPackage.value = null
+        _packageSettings.value = emptyList()
+    }
+
+    fun setSettingValue(key: String, value: String) {
+        // Store in shared config via ModuleApi
+        // We use the importer's shared config mechanism
+        viewModelScope.launch(Dispatchers.IO) {
+            moduleImporter.setConfigValue(key, value)
+            // Update local state for immediate UI feedback
+            _packageSettings.value = _packageSettings.value.map {
+                if (it.key == key) it.copy(currentValue = value) else it
+            }
+        }
+    }
+
+    fun saveSettings() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _isLoading.value = true
+            moduleImporter.saveConfig()
+            val pkgName = _viewingSettingsPackage.value
+            if (pkgName != null) {
+                val loadResult = moduleLoader.loadAll()
+                _message.value = "设置已保存\n${loadResult.message}"
+            }
+            _isLoading.value = false
+        }
+    }
+
+    fun getConfigValue(key: String, default: String): String {
+        return moduleImporter.getConfigValue(key, default)
     }
 }

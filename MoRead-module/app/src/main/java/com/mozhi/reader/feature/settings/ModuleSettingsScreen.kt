@@ -18,6 +18,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.ArrowDropDown
+import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
@@ -25,10 +27,15 @@ import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.PowerSettingsNew
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Save
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Upload
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -36,14 +43,21 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -62,6 +76,10 @@ fun ModuleSettingsScreen(
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
     val logs by viewModel.logs.collectAsStateWithLifecycle()
+    val modulesEnabled by viewModel.modulesEnabled.collectAsStateWithLifecycle()
+    val packageEnabled by viewModel.packageEnabled.collectAsStateWithLifecycle()
+    val multiSelectMode by viewModel.multiSelectMode.collectAsStateWithLifecycle()
+    val selectedPackages by viewModel.selectedPackages.collectAsStateWithLifecycle()
 
     val viewingPackage by viewModel.viewingPackage.collectAsStateWithLifecycle()
     val packageFiles by viewModel.packageFiles.collectAsStateWithLifecycle()
@@ -73,51 +91,35 @@ fun ModuleSettingsScreen(
     val pendingExportAll by viewModel.pendingExportAll.collectAsStateWithLifecycle()
     val pendingExportLogs by viewModel.pendingExportLogs.collectAsStateWithLifecycle()
 
-    // SAF launcher for importing .mrm files
+    val viewingSettingsPackage by viewModel.viewingSettingsPackage.collectAsStateWithLifecycle()
+    val packageSettings by viewModel.packageSettings.collectAsStateWithLifecycle()
+
+    // SAF launchers
     val importPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri != null) viewModel.importModule(uri)
-    }
+    ) { uri -> if (uri != null) viewModel.importModule(uri) }
 
-    // SAF launcher for exporting a single package
     val exportSinglePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/zip")
-    ) { uri: Uri? ->
-        if (uri != null) viewModel.exportPackageToUri(uri)
-    }
+    ) { uri: Uri? -> if (uri != null) viewModel.exportPackageToUri(uri) }
 
-    // SAF launcher for exporting all packages
     val exportAllPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/zip")
-    ) { uri: Uri? ->
-        if (uri != null) viewModel.exportAllToUri(uri)
-    }
+    ) { uri: Uri? -> if (uri != null) viewModel.exportAllToUri(uri) }
 
-    // SAF launcher for exporting logs
     val exportLogsPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("text/plain")
-    ) { uri: Uri? ->
-        if (uri != null) viewModel.exportLogsToUri(uri)
-    }
+    ) { uri: Uri? -> if (uri != null) viewModel.exportLogsToUri(uri) }
 
-    // React to pending export requests
     LaunchedEffect(pendingExportPackage) {
-        pendingExportPackage?.let { pkgName ->
-            exportSinglePicker.launch("$pkgName.mrm")
-        }
+        pendingExportPackage?.let { exportSinglePicker.launch("$it.mrm") }
     }
     LaunchedEffect(pendingExportAll) {
-        if (pendingExportAll) {
-            exportAllPicker.launch("all-modules.mrm")
-        }
+        if (pendingExportAll) exportAllPicker.launch("all-modules.mrm")
     }
     LaunchedEffect(pendingExportLogs) {
-        if (pendingExportLogs) {
-            exportLogsPicker.launch("moread-logs.txt")
-        }
+        if (pendingExportLogs) exportLogsPicker.launch("moread-logs.txt")
     }
-
     LaunchedEffect(message) {
         message?.let {
             kotlinx.coroutines.delay(3000)
@@ -135,6 +137,14 @@ fun ModuleSettingsScreen(
                     }
                 },
                 actions = {
+                    if (packages.isNotEmpty() && !multiSelectMode) {
+                        IconButton(onClick = { viewModel.toggleMultiSelectMode() }) {
+                            Icon(Icons.Outlined.Checklist, contentDescription = "多选")
+                        }
+                    }
+                    if (multiSelectMode) {
+                        TextButton(onClick = { viewModel.selectAllPackages() }) { Text("全选") }
+                    }
                     IconButton(onClick = { viewModel.reloadAll() }) {
                         Icon(Icons.Outlined.Refresh, contentDescription = "重新加载")
                     }
@@ -150,35 +160,63 @@ fun ModuleSettingsScreen(
             modifier = Modifier.fillMaxSize().padding(padding),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Import + Export buttons
+            // ── Master switch ────────────────────────────────────
             item {
-                MoReadSection(title = "模块包", icon = Icons.Outlined.Extension) {
-                    MoReadRow(
-                        icon = Icons.Outlined.Upload,
-                        title = "导入模块包",
-                        subtitle = "选择 .mrm 或 .zip 文件导入",
-                        onClick = {
-                            importPicker.launch(arrayOf("application/zip", "application/octet-stream", "*/*"))
+                MoReadBlock(title = "模块系统") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("启用模块系统", style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                "关闭后全部使用原生功能",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
-                    )
-                    MoReadRowDivider()
-                    MoReadRow(
-                        icon = Icons.Outlined.Download,
-                        title = "导出全部模块",
-                        subtitle = if (packages.isEmpty()) "暂无已安装模块" else "将 ${packages.size} 个模块包打包为 .mrm",
-                        onClick = { viewModel.requestExportAll() }
-                    )
-                    MoReadRowDivider()
-                    MoReadRow(
-                        icon = Icons.Outlined.Refresh,
-                        title = "重新加载全部模块",
-                        subtitle = "重新扫描并执行所有模块",
-                        onClick = { viewModel.reloadAll() }
-                    )
+                        Switch(
+                            checked = modulesEnabled,
+                            onCheckedChange = { viewModel.setModulesEnabled(it) }
+                        )
+                    }
                 }
             }
 
-            // Module directory path (for root users)
+            // ── Import / Export / Reload ─────────────────────────
+            if (modulesEnabled) {
+                item {
+                    MoReadSection(title = "模块包", icon = Icons.Outlined.Extension) {
+                        MoReadRow(
+                            icon = Icons.Outlined.Upload,
+                            title = "导入模块包",
+                            subtitle = "选择 .mrm 或 .zip 文件导入",
+                            onClick = {
+                                importPicker.launch(arrayOf("application/zip", "application/octet-stream", "*/*"))
+                            }
+                        )
+                        MoReadRowDivider()
+                        MoReadRow(
+                            icon = Icons.Outlined.Download,
+                            title = "导出全部模块",
+                            subtitle = if (packages.isEmpty()) "暂无已安装模块" else "将 ${packages.size} 个模块包打包为 .mrm",
+                            onClick = { viewModel.requestExportAll() }
+                        )
+                        MoReadRowDivider()
+                        MoReadRow(
+                            icon = Icons.Outlined.Refresh,
+                            title = "重新加载全部模块",
+                            subtitle = "重新扫描并执行所有模块",
+                            onClick = { viewModel.reloadAll() }
+                        )
+                    }
+                }
+            }
+
+            // ── Module directory ─────────────────────────────────
             item {
                 MoReadBlock(title = "模块目录（内部存储）") {
                     Text(
@@ -202,48 +240,128 @@ fun ModuleSettingsScreen(
                 }
             }
 
-            // Installed packages
-            if (packages.isNotEmpty()) {
+            // ── Installed packages ───────────────────────────────
+            if (packages.isNotEmpty() && modulesEnabled) {
                 item {
-                    MoReadSection(title = "已安装模块 (${packages.size})", icon = Icons.Outlined.Folder) {
+                    MoReadSection(
+                        title = if (multiSelectMode) "已选 ${selectedPackages.size}/${packages.size}" else "已安装模块 (${packages.size})",
+                        icon = Icons.Outlined.Folder
+                    ) {
                         packages.forEachIndexed { index, pkg ->
                             if (index > 0) MoReadRowDivider()
-                            MoReadRow(
-                                icon = Icons.Outlined.Extension,
-                                title = pkg.displayName,
-                                subtitle = buildString {
-                                    append("v${pkg.version}")
-                                    append(" · ${pkg.jsFileCount} 个模块")
-                                    if (pkg.author.isNotBlank()) append(" · ${pkg.author}")
-                                    if (pkg.description.isNotBlank()) append("\n${pkg.description}")
-                                },
-                                trailing = {
-                                    Row {
-                                        // View files button
-                                        IconButton(onClick = { viewModel.openPackageFiles(pkg.name) }) {
-                                            Icon(Icons.Outlined.Code, contentDescription = "查看源码")
-                                        }
-                                        // Export button
-                                        IconButton(onClick = { viewModel.requestExportPackage(pkg.name) }) {
-                                            Icon(Icons.Outlined.Download, contentDescription = "导出")
-                                        }
-                                        // Delete button
-                                        IconButton(onClick = { viewModel.deletePackage(pkg.name) }) {
-                                            Icon(
-                                                Icons.Outlined.Delete,
-                                                contentDescription = "删除",
-                                                tint = MaterialTheme.colorScheme.error
-                                            )
-                                        }
+                            val isEnabled = packageEnabled[pkg.name] ?: true
+                            val isSelected = pkg.name in selectedPackages
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        if (multiSelectMode) viewModel.togglePackageSelection(pkg.name)
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Checkbox in multi-select mode
+                                if (multiSelectMode) {
+                                    Checkbox(
+                                        checked = isSelected,
+                                        onCheckedChange = { viewModel.togglePackageSelection(pkg.name) },
+                                        modifier = Modifier.padding(end = 8.dp)
+                                    )
+                                }
+
+                                // Icon + text
+                                Icon(
+                                    Icons.Outlined.Extension,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(horizontal = 12.dp)
+                                ) {
+                                    Text(
+                                        text = pkg.displayName,
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                    Text(
+                                        text = buildString {
+                                            append("v${pkg.version}")
+                                            append(" · ${pkg.jsFileCount} 个模块")
+                                            if (pkg.author.isNotBlank()) append(" · ${pkg.author}")
+                                            if (pkg.description.isNotBlank()) append("\n${pkg.description}")
+                                            if (!isEnabled) append("\n(已禁用)")
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                // Single package switch (hidden in multi-select)
+                                if (!multiSelectMode) {
+                                    Switch(
+                                        checked = isEnabled,
+                                        onCheckedChange = { viewModel.setPackageEnabled(pkg.name, it) }
+                                    )
+                                    // Settings button (if manifest declares settings)
+                                    IconButton(onClick = { viewModel.openPackageSettings(pkg.name) }) {
+                                        Icon(Icons.Outlined.Settings, contentDescription = "设置")
+                                    }
+                                    // View files
+                                    IconButton(onClick = { viewModel.openPackageFiles(pkg.name) }) {
+                                        Icon(Icons.Outlined.Code, contentDescription = "查看源码")
+                                    }
+                                    // Export
+                                    IconButton(onClick = { viewModel.requestExportPackage(pkg.name) }) {
+                                        Icon(Icons.Outlined.Download, contentDescription = "导出")
+                                    }
+                                    // Delete
+                                    IconButton(onClick = { viewModel.deletePackage(pkg.name) }) {
+                                        Icon(
+                                            Icons.Outlined.Delete,
+                                            contentDescription = "删除",
+                                            tint = MaterialTheme.colorScheme.error
+                                        )
                                     }
                                 }
-                            )
+                            }
+                        }
+                    }
+                }
+
+                // ── Batch action bar ──────────────────────────────
+                if (multiSelectMode && selectedPackages.isNotEmpty()) {
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            TextButton(onClick = { viewModel.batchEnable() }) {
+                                Icon(Icons.Outlined.PowerSettingsNew, contentDescription = null,
+                                    modifier = Modifier.size(18.dp))
+                                Text(" 批量启用", style = MaterialTheme.typography.labelSmall)
+                            }
+                            TextButton(onClick = { viewModel.batchDisable() }) {
+                                Icon(Icons.Outlined.PowerSettingsNew, contentDescription = null,
+                                    modifier = Modifier.size(18.dp))
+                                Text(" 批量禁用", style = MaterialTheme.typography.labelSmall)
+                            }
+                            TextButton(onClick = { viewModel.batchDelete() }) {
+                                Icon(Icons.Outlined.Delete, contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(18.dp))
+                                Text(" 批量删除", style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error)
+                            }
                         }
                     }
                 }
             }
 
-            // Message
+            // ── Message ─────────────────────────────────────────
             message?.let {
                 item {
                     MoReadBlock(title = "操作结果") {
@@ -256,17 +374,15 @@ fun ModuleSettingsScreen(
                 }
             }
 
-            // Logs (always visible — shows action buttons even when empty)
+            // ── Logs ─────────────────────────────────────────────
             item {
                 MoReadBlock(title = "模块日志 (${logs.size} 条)") {
-                    // Action buttons row
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        // Copy
                         TextButton(
                             onClick = { viewModel.copyLogs() },
                             enabled = logs.isNotEmpty()
@@ -275,7 +391,6 @@ fun ModuleSettingsScreen(
                                 modifier = Modifier.size(18.dp))
                             Text(" 复制", style = MaterialTheme.typography.labelSmall)
                         }
-                        // Export
                         TextButton(
                             onClick = { viewModel.requestExportLogs() },
                             enabled = logs.isNotEmpty()
@@ -284,7 +399,6 @@ fun ModuleSettingsScreen(
                                 modifier = Modifier.size(18.dp))
                             Text(" 导出", style = MaterialTheme.typography.labelSmall)
                         }
-                        // Clear
                         TextButton(
                             onClick = { viewModel.clearLogs() },
                             enabled = logs.isNotEmpty()
@@ -297,7 +411,6 @@ fun ModuleSettingsScreen(
                         }
                     }
 
-                    // Log content
                     if (logs.isEmpty()) {
                         Text(
                             text = "暂无日志",
@@ -336,9 +449,7 @@ fun ModuleSettingsScreen(
             onDismissRequest = { viewModel.closePackageFiles() },
             title = { Text("文件列表 — $viewingPackage") },
             text = {
-                LazyColumn(
-                    modifier = Modifier.heightIn(max = 400.dp)
-                ) {
+                LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
                     items(packageFiles) { file ->
                         Row(
                             modifier = Modifier
@@ -353,12 +464,9 @@ fun ModuleSettingsScreen(
                                 tint = MaterialTheme.colorScheme.primary
                             )
                             Column {
+                                Text(file.name, style = MaterialTheme.typography.bodyMedium)
                                 Text(
-                                    text = file.name,
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                                Text(
-                                    text = "${formatFileSize(file.size)} · ${file.relativePath}",
+                                    "${formatFileSize(file.size)} · ${file.relativePath}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -373,7 +481,7 @@ fun ModuleSettingsScreen(
         )
     }
 
-    // ── File viewer / editor dialog ────────────────────────────────
+    // ── File viewer / editor dialog ───────────────────────────────
 
     viewingFile?.let { file ->
         AlertDialog(
@@ -427,6 +535,144 @@ fun ModuleSettingsScreen(
                     }
                 } else {
                     TextButton(onClick = { viewModel.closeFileViewer() }) { Text("关闭") }
+                }
+            }
+        )
+    }
+
+    // ── Package settings dialog (manifest-declared UI) ───────────
+
+    if (viewingSettingsPackage != null) {
+        AlertDialog(
+            onDismissRequest = { viewModel.closePackageSettings() },
+            title = { Text("设置 — $viewingSettingsPackage") },
+            text = {
+                if (packageSettings.isEmpty()) {
+                    Text("此模块没有可配置项", style = MaterialTheme.typography.bodyMedium)
+                } else {
+                    Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+                        packageSettings.forEach { (key, setting) ->
+                            val label = setting.optString("label", key)
+                            val type = setting.optString("type", "string")
+                            val default = setting.optString("default", "")
+                            val currentVal = viewModel.getConfigValue(key, default)
+
+                            when (type) {
+                                "password" -> {
+                                    OutlinedTextField(
+                                        value = currentVal,
+                                        onValueChange = { viewModel.setSettingValue(key, it) },
+                                        label = { Text(label) },
+                                        visualTransformation = PasswordVisualTransformation(),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 4.dp)
+                                    )
+                                }
+                                "bool" -> {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 4.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(label, style = MaterialTheme.typography.bodyMedium)
+                                        Switch(
+                                            checked = currentVal == "true",
+                                            onCheckedChange = {
+                                                viewModel.setSettingValue(key, if (it) "true" else "false")
+                                            }
+                                        )
+                                    }
+                                }
+                                "select" -> {
+                                    val options = mutableListOf<String>()
+                                    val arr = setting.optJSONArray("options")
+                                    if (arr != null) {
+                                        for (i in 0 until arr.length()) {
+                                            options.add(arr.getString(i))
+                                        }
+                                    }
+                                    var expanded by remember { mutableStateOf(false) }
+
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { expanded = true }
+                                            .padding(vertical = 8.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column {
+                                            Text(label, style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text(currentVal.ifEmpty { default },
+                                                style = MaterialTheme.typography.bodyMedium)
+                                        }
+                                        Icon(Icons.Outlined.ArrowDropDown, contentDescription = null)
+                                    }
+                                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                                        options.forEach { opt ->
+                                            DropdownMenuItem(
+                                                text = { Text(opt) },
+                                                onClick = {
+                                                    viewModel.setSettingValue(key, opt)
+                                                    expanded = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                                "slider" -> {
+                                    val min = setting.optDouble("min", 0.0).toFloat()
+                                    val max = setting.optDouble("max", 100.0).toFloat()
+                                    val currentFloat = currentVal.toFloatOrNull() ?: default.toFloatOrNull() ?: min
+
+                                    Text(label, style = MaterialTheme.typography.bodySmall,
+                                        modifier = Modifier.padding(top = 8.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Slider(
+                                            value = currentFloat,
+                                            onValueChange = { viewModel.setSettingValue(key, it.toString()) },
+                                            valueRange = min..max,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        Text(
+                                            "%.1f".format(currentFloat),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            modifier = Modifier.padding(start = 8.dp)
+                                        )
+                                    }
+                                }
+                                else -> {
+                                    // Default: string
+                                    OutlinedTextField(
+                                        value = currentVal,
+                                        onValueChange = { viewModel.setSettingValue(key, it) },
+                                        label = { Text(label) },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 4.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Row {
+                    TextButton(onClick = { viewModel.closePackageSettings() }) { Text("关闭") }
+                    if (packageSettings.isNotEmpty()) {
+                        TextButton(onClick = { viewModel.saveSettings() }) {
+                            Icon(Icons.Outlined.Save, contentDescription = null)
+                            Text(" 保存")
+                        }
+                    }
                 }
             }
         )

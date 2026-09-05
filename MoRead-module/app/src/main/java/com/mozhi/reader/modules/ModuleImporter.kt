@@ -422,6 +422,55 @@ class ModuleImporter @Inject constructor(
         val isEditable: Boolean
     )
 
+    // ── Manifest settings (auto-rendered UI) ─────────────────────
+
+    /**
+     * Read declared settings from a package's manifest.json.
+     * Returns a list of ManifestSetting for the UI to render.
+     */
+    fun getPackageSettings(packageName: String): List<Pair<String, JSONObject>> {
+        val pkgDir = File(moduleDir, packageName)
+        val manifestFile = File(pkgDir, MANIFEST_FILE)
+        if (!manifestFile.exists()) return emptyList()
+
+        val manifest = try { JSONObject(manifestFile.readText()) } catch (_: Exception) { return emptyList() }
+        val settingsArray = manifest.optJSONArray("settings") ?: return emptyList()
+
+        val result = mutableListOf<Pair<String, JSONObject>>()
+        for (i in 0 until settingsArray.length()) {
+            val setting = settingsArray.optJSONObject(i) ?: continue
+            val key = setting.optString("key", "")
+            if (key.isNotEmpty()) {
+                result.add(key to setting)
+            }
+        }
+        return result
+    }
+
+    /**
+     * Read a config value from the shared config.json.
+     */
+    fun getConfigValue(key: String, default: String = ""): String {
+        return loadSharedConfig().optString(key, default)
+    }
+
+    /**
+     * Write a config value to the shared config.json (in-memory + persist).
+     */
+    fun setConfigValue(key: String, value: String) {
+        val config = loadSharedConfig()
+        config.put(key, value)
+        saveSharedConfig(config)
+    }
+
+    /**
+     * Persist the shared config (no-op if already saved by setConfigValue).
+     */
+    fun saveConfig() {
+        // Already saved by setConfigValue, but reload from file to be safe
+        hookRegistry.log("[Importer] Config saved")
+    }
+
     // ── Zip helpers ──────────────────────────────────────────────────
 
     private fun zipDirectory(dir: File, output: OutputStream) {
