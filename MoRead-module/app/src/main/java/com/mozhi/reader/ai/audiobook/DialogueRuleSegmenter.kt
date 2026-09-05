@@ -22,13 +22,17 @@ object DialogueRuleSegmenter {
     )
     private val invalidSpeakers = setOf("他", "她", "它", "我", "你", "旁白", "有人", "那人")
 
-    fun segment(text: String): List<DraftAudiobookSegment> {
+    fun segment(text: String, bookId: Long = 0, chapterIndex: Int = 0): List<DraftAudiobookSegment> {
         if (text.isBlank()) return emptyList()
 
         // ── Module hook: dialogue.segment ──
         // JS modules return JSON: [{"start":0,"end":10,"role":"张三","kind":"DIALOGUE","confidence":0.9}, ...]
         if (HookPoints.hasHook("dialogue.segment")) {
-            val hookResult = HookPoints.callNullable<String>("dialogue.segment", mapOf("text" to text))
+            val hookResult = HookPoints.callNullable<String>("dialogue.segment", mapOf(
+                "text" to text,
+                "bookId" to bookId,
+                "chapterIndex" to chapterIndex
+            ))
             if (hookResult != null) {
                 try {
                     val arr = org.json.JSONArray(hookResult)
