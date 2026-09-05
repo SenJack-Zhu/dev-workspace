@@ -1,6 +1,9 @@
 package com.mozhi.reader.feature.settings
 
 import android.app.Application
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -59,6 +62,9 @@ class ModuleSettingsViewModel @Inject constructor(
 
     private val _pendingExportAll = MutableStateFlow(false)
     val pendingExportAll: StateFlow<Boolean> = _pendingExportAll.asStateFlow()
+
+    private val _pendingExportLogs = MutableStateFlow(false)
+    val pendingExportLogs: StateFlow<Boolean> = _pendingExportLogs.asStateFlow()
 
     val moduleDirPath: String get() = moduleImporter.moduleDir.absolutePath
 
@@ -226,5 +232,44 @@ class ModuleSettingsViewModel @Inject constructor(
 
     fun clearMessage() {
         _message.value = null
+    }
+
+    // ── Log operations ─────────────────────────────────────────────
+
+    fun clearLogs() {
+        hookRegistry.clearLogs()
+        refresh()
+    }
+
+    fun copyLogs() {
+        val text = hookRegistry.getLogsText()
+        if (text.isEmpty()) {
+            _message.value = "日志为空"
+            return
+        }
+        val clipboard = app.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("MoRead Logs", text))
+        _message.value = "已复制 ${hookRegistry.getLogs().size} 条日志到剪贴板"
+    }
+
+    fun requestExportLogs() {
+        _pendingExportLogs.value = true
+    }
+
+    fun exportLogsToUri(uri: Uri) {
+        _pendingExportLogs.value = false
+        viewModelScope.launch(Dispatchers.IO) {
+            _isLoading.value = true
+            try {
+                val text = hookRegistry.getLogsText()
+                app.contentResolver.openOutputStream(uri)?.use { out ->
+                    out.write(text.toByteArray(Charsets.UTF_8))
+                }
+                _message.value = "已导出 ${hookRegistry.getLogs().size} 条日志"
+            } catch (e: Exception) {
+                _message.value = "导出日志失败: ${e.message}"
+            }
+            _isLoading.value = false
+        }
     }
 }

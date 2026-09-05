@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -18,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Edit
@@ -69,6 +71,7 @@ fun ModuleSettingsScreen(
 
     val pendingExportPackage by viewModel.pendingExportPackage.collectAsStateWithLifecycle()
     val pendingExportAll by viewModel.pendingExportAll.collectAsStateWithLifecycle()
+    val pendingExportLogs by viewModel.pendingExportLogs.collectAsStateWithLifecycle()
 
     // SAF launcher for importing .mrm files
     val importPicker = rememberLauncherForActivityResult(
@@ -91,6 +94,13 @@ fun ModuleSettingsScreen(
         if (uri != null) viewModel.exportAllToUri(uri)
     }
 
+    // SAF launcher for exporting logs
+    val exportLogsPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/plain")
+    ) { uri: Uri? ->
+        if (uri != null) viewModel.exportLogsToUri(uri)
+    }
+
     // React to pending export requests
     LaunchedEffect(pendingExportPackage) {
         pendingExportPackage?.let { pkgName ->
@@ -100,6 +110,11 @@ fun ModuleSettingsScreen(
     LaunchedEffect(pendingExportAll) {
         if (pendingExportAll) {
             exportAllPicker.launch("all-modules.mrm")
+        }
+    }
+    LaunchedEffect(pendingExportLogs) {
+        if (pendingExportLogs) {
+            exportLogsPicker.launch("moread-logs.txt")
         }
     }
 
@@ -235,12 +250,64 @@ fun ModuleSettingsScreen(
                 }
             }
 
-            // Logs
-            if (logs.isNotEmpty()) {
-                item {
-                    MoReadBlock(title = "模块日志 (最近 ${logs.size} 条)") {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            logs.takeLast(50).forEach { log ->
+            // Logs (always visible — shows action buttons even when empty)
+            item {
+                MoReadBlock(title = "模块日志 (${logs.size} 条)") {
+                    // Action buttons row
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Copy
+                        TextButton(
+                            onClick = { viewModel.copyLogs() },
+                            enabled = logs.isNotEmpty()
+                        ) {
+                            Icon(Icons.Outlined.ContentCopy, contentDescription = null,
+                                modifier = Modifier.size(18.dp))
+                            Text(" 复制", style = MaterialTheme.typography.labelSmall)
+                        }
+                        // Export
+                        TextButton(
+                            onClick = { viewModel.requestExportLogs() },
+                            enabled = logs.isNotEmpty()
+                        ) {
+                            Icon(Icons.Outlined.Download, contentDescription = null,
+                                modifier = Modifier.size(18.dp))
+                            Text(" 导出", style = MaterialTheme.typography.labelSmall)
+                        }
+                        // Clear
+                        TextButton(
+                            onClick = { viewModel.clearLogs() },
+                            enabled = logs.isNotEmpty()
+                        ) {
+                            Icon(Icons.Outlined.Delete, contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(18.dp))
+                            Text(" 清空", style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+
+                    // Log content
+                    if (logs.isEmpty()) {
+                        Text(
+                            text = "暂无日志",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        )
+                    } else {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 400.dp)
+                                .verticalScroll(rememberScrollState())
+                                .padding(horizontal = 16.dp, vertical = 4.dp)
+                        ) {
+                            logs.takeLast(60).forEach { log ->
                                 Text(
                                     text = log,
                                     style = MaterialTheme.typography.bodySmall,

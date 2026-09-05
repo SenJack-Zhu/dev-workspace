@@ -84,12 +84,29 @@ class HookRegistry @Inject constructor() {
     fun getLogs(): List<String> = logCollector.toList()
 
     /**
+     * Get all logs as a single text string (for copy/export).
+     */
+    fun getLogsText(): String = logCollector.joinToString("\n")
+
+    /**
+     * Clear all collected logs.
+     */
+    @Synchronized
+    fun clearLogs() {
+        logCollector.clear()
+        log("[HookRegistry] Logs cleared")
+    }
+
+    /**
      * Add a log entry.
+     * Logs are automatically pruned to prevent unbounded growth.
      */
     fun log(message: String) {
         logCollector.add("[${System.currentTimeMillis()}] $message")
-        if (logCollector.size > 1000) {
-            logCollector.removeAt(0)
+        // Prune: keep last 500 entries
+        if (logCollector.size > 500) {
+            val removeCount = logCollector.size - 500
+            repeat(removeCount) { logCollector.removeAt(0) }
         }
     }
 
