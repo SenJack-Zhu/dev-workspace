@@ -15,6 +15,7 @@ MoRead-module/
 │   ├── README.md                 # 本文件
 │   ├── HOOKS.md                  # 钩子清单
 │   ├── ROADMAP.md                # 需求计划与路线图
+│   ├── ERRORS.md                 # 编译错误知识库（推送前必读）
 │   ├── MoRead-代码地图-总索引.md
 │   ├── MoRead-core-api-reference.md
 │   ├── MoRead-ai-api-reference.md
