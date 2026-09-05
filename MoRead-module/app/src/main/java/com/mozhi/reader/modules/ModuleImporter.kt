@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import javax.inject.Inject
 import javax.inject.Singleton
+import dagger.hilt.android.qualifiers.ApplicationContext
 import org.json.JSONObject
 import java.io.File
 import java.io.InputStream
@@ -40,7 +41,7 @@ data class ImportResult(
  */
 @Singleton
 class ModuleImporter @Inject constructor(
-    private val context: Context,
+    @ApplicationContext private val context: Context,
     private val hookRegistry: HookRegistry
 ) {
     companion object {

@@ -3,6 +3,7 @@ package com.mozhi.reader.modules
 import android.content.Context
 import javax.inject.Inject
 import javax.inject.Singleton
+import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 
 /**
@@ -29,7 +30,7 @@ import java.io.File
  */
 @Singleton
 class ModuleLoader @Inject constructor(
-    private val context: Context,
+    @ApplicationContext private val context: Context,
     private val jsEngine: JsEngine,
     private val hookRegistry: HookRegistry
 ) {

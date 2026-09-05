@@ -3,6 +3,7 @@ package com.mozhi.reader.modules
 import android.content.Context
 import javax.inject.Inject
 import javax.inject.Singleton
+import dagger.hilt.android.qualifiers.ApplicationContext
 import org.mozilla.javascript.Context as RhinoContext
 import org.mozilla.javascript.Function
 import org.mozilla.javascript.Scriptable
@@ -18,7 +19,7 @@ import org.mozilla.javascript.ScriptableObject
  */
 @Singleton
 class JsEngine @Inject constructor(
-    private val context: Context,
+    @ApplicationContext private val context: Context,
     private val hookRegistry: HookRegistry,
     private val moduleApi: ModuleApi
 ) {

@@ -2,6 +2,7 @@ package com.mozhi.reader.modules
 
 import android.content.Context
 import android.content.pm.PackageManager
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 import org.json.JSONObject
@@ -19,7 +20,7 @@ import org.mozilla.javascript.ScriptableObject
  */
 @Singleton
 class ModuleApi @Inject constructor(
-    private val context: Context,
+    @ApplicationContext private val context: Context,
     private val hookRegistry: HookRegistry
 ) {
     companion object {
