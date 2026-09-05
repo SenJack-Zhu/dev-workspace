@@ -18,7 +18,7 @@ class HookRegistry @Inject constructor() {
 
     private val hooks = mutableMapOf<String, MutableList<HookEntry>>()
     private val logCollector = mutableListOf<String>()
-    private val timeFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault())
+    private val timeFormat = SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.getDefault())
 
     data class HookEntry(
         val moduleName: String,
