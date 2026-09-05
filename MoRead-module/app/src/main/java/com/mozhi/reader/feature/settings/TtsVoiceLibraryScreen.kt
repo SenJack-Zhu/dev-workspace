@@ -941,16 +941,116 @@ private object VoiceJson {
         }
     )
 
-    fun decode(raw: String): List<TtsVoiceEntity> = json.decodeFromString(serializer, raw).map {
-        TtsVoiceEntity(
-            voiceId = it.voiceId,
-            displayName = it.displayName,
-            tags = it.tags,
-            gender = it.gender,
-            providerHint = it.providerHint,
-            extraJson = it.extraJson,
-            pinned = it.pinned,
-            sortOrder = it.sortOrder
-        )
+    fun decode(raw: String): List<TtsVoiceEntity> {
+        // 先试试标准格式（数组）
+        return try {
+            json.decodeFromString(serializer, raw).map {
+                TtsVoiceEntity(
+                    voiceId = it.voiceId,
+                    displayName = it.displayName,
+                    tags = it.tags,
+                    gender = it.gender,
+                    providerHint = it.providerHint,
+                    extraJson = it.extraJson,
+                    pinned = it.pinned,
+                    sortOrder = it.sortOrder
+                )
+            }
+        } catch (_: Exception) {
+            // 标准格式解析失败，试试其他常见格式（转发器格式等）
+            decodeFlexible(raw)
+        }
+    }
+
+    /**
+     * 灵活解析：支持多种第三方音色列表格式
+     *  - 转发器格式: { success, data: { catalog: { category: [{id, name, gender, locale, type, desc}] } } }
+     *  - 简单数组: [{id, name, ...}]
+     */
+    private fun decodeFlexible(raw: String): List<TtsVoiceEntity> {
+        val root = org.json.JSONObject(raw)
+        val list = mutableListOf<TtsVoiceEntity>()
+
+        // 找音色数组：可能在 data.catalog（字典）或 data.voices（数组）或根数组
+        val arrays = mutableListOf<org.json.JSONArray>()
+        val categories = mutableListOf<String>()
+
+        // 尝试 data.catalog 字典格式
+        val data = root.optJSONObject("data")
+        if (data != null) {
+            val catalog = data.optJSONObject("catalog")
+            if (catalog != null) {
+                val keys = catalog.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    val arr = catalog.optJSONArray(key)
+                    if (arr != null) {
+                        arrays.add(arr)
+                        // 每个音色对应一个分类标签
+                        for (i in 0 until arr.length()) {
+                            categories.add(key)
+                        }
+                    }
+                }
+            }
+            // 尝试 data.voices / data.list 等
+            listOf("voices", "list", "items", "results").forEach { key ->
+                val arr = data.optJSONArray(key)
+                if (arr != null) arrays.add(arr)
+            }
+        }
+
+        // 根级数组
+        listOf("voices", "list", "items", "results").forEach { key ->
+            val arr = root.optJSONArray(key)
+            if (arr != null) arrays.add(arr)
+        }
+
+        // 如果还没找到，看看根本身是不是数组
+        if (arrays.isEmpty()) {
+            try {
+                val rootArr = org.json.JSONArray(raw)
+                arrays.add(rootArr)
+            } catch (_: Exception) {}
+        }
+
+        var catIndex = 0
+        for (arr in arrays) {
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i) ?: continue
+                val id = o.optString("id", o.optString("voiceId", o.optString("voice_id", "")))
+                val name = o.optString("name", o.optString("displayName",
+                    o.optString("display_name", id)))
+                if (id.isBlank()) continue
+
+                // 组装 tags
+                val tags = mutableListOf<String>()
+                o.optString("gender", "").takeIf { it.isNotBlank() }?.let { tags.add(it) }
+                o.optString("locale", "").takeIf { it.isNotBlank() }?.let { tags.add(it) }
+                o.optString("type", "").takeIf { it.isNotBlank() }?.let { tags.add(it) }
+                o.optString("desc", "").takeIf { it.isNotBlank() }?.let { tags.add(it) }
+                if (categories.isNotEmpty() && catIndex < categories.size) {
+                    tags.add(categories[catIndex])
+                }
+                catIndex++
+
+                val gender = when (o.optString("gender", "").uppercase()) {
+                    "MALE", "MAN", "BOY" -> "MALE"
+                    "FEMALE", "WOMAN", "GIRL" -> "FEMALE"
+                    else -> "UNSPECIFIED"
+                }
+
+                list += TtsVoiceEntity(
+                    voiceId = id,
+                    displayName = name,
+                    tags = tags.joinToString(","),
+                    gender = gender,
+                    providerHint = o.optString("provider", "")
+                )
+            }
+        }
+
+        if (list.isEmpty()) throw IllegalArgumentException("无法识别的音色 JSON 格式")
+        return list
     }
 }

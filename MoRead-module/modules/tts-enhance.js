@@ -344,13 +344,35 @@ function initCustomVoices() {
 
             var json = JSON.parse(resp.body);
 
-            // 按路径提取数组
-            var arr = json;
+            // 按路径提取
+            var extracted = json;
             if (voicesExtract && voicesExtract.length > 0) {
                 var parts = voicesExtract.split(".");
                 for (var i = 0; i < parts.length; i++) {
-                    if (arr === null || arr === undefined) break;
-                    arr = arr[parts[i]];
+                    if (extracted === null || extracted === undefined) break;
+                    extracted = extracted[parts[i]];
+                }
+            }
+
+            // 支持两种格式：
+            // 1. 直接是数组 → 用它
+            // 2. 是对象（字典）→ 把所有 value 是数组的合并（适用于 catalog 分类结构）
+            var arr = null;
+            if (extracted && Array.isArray(extracted)) {
+                arr = extracted;
+            } else if (extracted && typeof extracted === "object") {
+                arr = [];
+                for (var k in extracted) {
+                    if (extracted.hasOwnProperty(k) && Array.isArray(extracted[k])) {
+                        // 给每个音色加上分类标签
+                        for (var ki = 0; ki < extracted[k].length; ki++) {
+                            var item = extracted[k][ki];
+                            if (item && typeof item === "object") {
+                                item._catalog = k; // 临时字段，后面转 tag
+                            }
+                        }
+                        arr = arr.concat(extracted[k]);
+                    }
                 }
             }
 
@@ -366,11 +388,20 @@ function initCustomVoices() {
                 var vid = item[voiceIdField] || item.id || item.voice_id || item.voiceId || "";
                 var vname = item[voiceNameField] || item.name || item.display_name || item.displayName || vid;
                 if (vid) {
+                    // 组装 tags：gender + locale + type + catalog + desc
+                    var tagList = [];
+                    if (item.gender) tagList.push(item.gender);
+                    if (item.locale) tagList.push(item.locale);
+                    if (item.type) tagList.push(item.type);
+                    if (item._catalog) tagList.push(item._catalog);
+                    if (item.desc) tagList.push(item.desc);
                     voices.push({
                         voiceId: vid,
                         displayName: vname,
-                        gender: item.gender || "UNKNOWN",
-                        tags: item.tags || ""
+                        gender: (item.gender || "").toUpperCase() === "FEMALE" ? "FEMALE"
+                              : (item.gender || "").toUpperCase() === "MALE" ? "MALE"
+                              : "UNSPECIFIED",
+                        tags: tagList.join(",")
                     });
                 }
             }
