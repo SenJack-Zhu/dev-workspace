@@ -9,6 +9,7 @@ import org.json.JSONObject
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
+import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
@@ -120,7 +121,7 @@ class ModuleImporter @Inject constructor(
         val jsFiles = mutableListOf<String>()
 
         try {
-            ZipInputStream(zipFile.inputStream()).use { zis ->
+            ZipInputStream(zipFile.inputStream(), Charsets.UTF_8).use { zis ->
                 var entry = zis.nextEntry
                 while (entry != null) {
                     val entryName = entry.name
@@ -138,9 +139,11 @@ class ModuleImporter @Inject constructor(
                         continue
                     }
 
-                    // Read manifest.json
+                    // Read manifest.json — use readBytes() not bufferedReader()
+                    // BufferedReader has 8KB buffer that can read into next entry
                     if (entryName == MANIFEST_FILE || entryName.endsWith("/$MANIFEST_FILE")) {
-                        val content = zis.bufferedReader().readText()
+                        val bytes = zis.readBytes()
+                        val content = String(bytes, Charsets.UTF_8)
                         manifest = JSONObject(content)
                         packageName = manifest.optString("name", "")
                         displayName = manifest.optString("displayName", packageName)
@@ -151,7 +154,8 @@ class ModuleImporter @Inject constructor(
 
                     // Read package config.json (for merging)
                     if (entryName == CONFIG_FILE || entryName.endsWith("/$CONFIG_FILE")) {
-                        val content = zis.bufferedReader().readText()
+                        val bytes = zis.readBytes()
+                        val content = String(bytes, Charsets.UTF_8)
                         packageConfig = JSONObject(content)
                         entry = zis.nextEntry
                         continue
@@ -199,7 +203,7 @@ class ModuleImporter @Inject constructor(
 
         // Second pass: extract files
         try {
-            ZipInputStream(zipFile.inputStream()).use { zis ->
+            ZipInputStream(zipFile.inputStream(), Charsets.UTF_8).use { zis ->
                 var entry = zis.nextEntry
                 while (entry != null) {
                     val entryName = entry.name
@@ -348,7 +352,7 @@ class ModuleImporter @Inject constructor(
         if (packages.isEmpty()) return false
         return try {
             context.contentResolver.openOutputStream(outputUri)?.use { out ->
-                val zos = ZipOutputStream(out)
+                val zos = ZipOutputStream(out, Charsets.UTF_8)
                 packages.sortedBy { it.name }.forEach { pkgDir ->
                     addDirToZip(zos, pkgDir, pkgDir.name)
                 }
@@ -421,7 +425,7 @@ class ModuleImporter @Inject constructor(
     // ── Zip helpers ──────────────────────────────────────────────────
 
     private fun zipDirectory(dir: File, output: OutputStream) {
-        val zos = ZipOutputStream(output)
+        val zos = ZipOutputStream(output, Charsets.UTF_8)
         addDirToZip(zos, dir, "")
         zos.close()
     }
