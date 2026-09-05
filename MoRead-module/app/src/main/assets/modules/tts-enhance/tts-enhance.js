@@ -1,9 +1,9 @@
 // ============================================================
-// TTS 增强模块 (TTS Enhance Module) v1.0.0
+// TTS 增强模块 (TTS Enhance Module) v1.1.0
 //
 // 注册三个 hook:
-//   - tts.synthesize:    自定义 TTS 语音合成端点
-//   - tts.voices:         自定义音色列表
+//   - tts.synthesize:    自定义 TTS 语音合成端点（OpenAI 兼容 / 万能转发器）
+//   - tts.voices:         自定义音色列表（静态 JSON / 动态拉取）
 //   - listen.sentence:    自定义句子断句规则
 //
 // 所有功能均可独立开关，通过设置面板配置。
@@ -27,6 +27,85 @@ function getConfigInt(key, def) {
     return isNaN(v) ? def : v;
 }
 
+/**
+ * 模板字符串替换，支持 {{变量名}} 占位符
+ * @param {string} template - 模板字符串
+ * @param {object} vars - 变量键值对
+ * @returns {string} 替换后的字符串
+ */
+function renderTemplate(template, vars) {
+    if (!template) return "";
+    var result = template;
+    for (var key in vars) {
+        if (vars.hasOwnProperty(key)) {
+            var val = (vars[key] !== undefined && vars[key] !== null) ? String(vars[key]) : "";
+            // 使用全局替换
+            var placeholder = "{{" + key + "}}";
+            while (result.indexOf(placeholder) >= 0) {
+                result = result.replace(placeholder, val);
+            }
+        }
+    }
+    return result;
+}
+
+/**
+ * 从响应体里提取音频数据，支持多种格式
+ * @param {string} body - 响应体
+ * @param {string} extractPath - 提取路径，如 "audio" / "data.audio" / ""(整个 body 是 base64)
+ * @param {string} defaultFormat - 默认音频格式
+ * @returns {object|null} {audio, mediaType} 或 null
+ */
+function extractAudio(body, extractPath, defaultFormat) {
+    if (!body || body.length === 0) return null;
+
+    // 先试试 JSON 解析
+    try {
+        var json = JSON.parse(body);
+        var audioVal = null;
+        var mediaTypeVal = null;
+
+        if (extractPath && extractPath.length > 0) {
+            // 按路径提取，支持 a.b.c
+            var parts = extractPath.split(".");
+            var current = json;
+            for (var i = 0; i < parts.length; i++) {
+                if (current === null || current === undefined) break;
+                current = current[parts[i]];
+            }
+            audioVal = current;
+        } else {
+            // 自动找常见字段
+            audioVal = json.audio || json.data || json.audioData || json.base64;
+        }
+
+        if (audioVal && typeof audioVal === "string" && audioVal.length > 50) {
+            // 找 mediaType
+            mediaTypeVal = json.mediaType || json.format || json.contentType;
+            if (!mediaTypeVal && defaultFormat) {
+                mediaTypeVal = "audio/" + defaultFormat;
+            }
+            return {
+                audio: audioVal,
+                mediaType: mediaTypeVal || "audio/mpeg"
+            };
+        }
+    } catch (e) {
+        // 不是 JSON，继续往下
+    }
+
+    // 如果整个 body 看起来像 base64
+    var b64test = body.replace(/\s/g, "");
+    if (/^[A-Za-z0-9+/=]+$/.test(b64test) && b64test.length > 100) {
+        return {
+            audio: b64test,
+            mediaType: defaultFormat ? "audio/" + defaultFormat : "audio/mpeg"
+        };
+    }
+
+    return null;
+}
+
 // ------------------------------------------------------------
 // 1. 自定义 TTS 端点 (tts.synthesize)
 // ------------------------------------------------------------
@@ -39,42 +118,158 @@ function initCustomTTS() {
         return;
     }
 
-    MoRead.log("[CustomTTS] 端点: " + endpoint);
+    // 模式：openai（兼容模式） / universal（万能转发器）
+    var mode = getConfig("ttsMode", "openai");
 
+    MoRead.log("[CustomTTS] 端点: " + endpoint);
+    MoRead.log("[CustomTTS] 模式: " + mode);
+
+    // ============== 万能转发器模式 ==============
+    if (mode === "universal") {
+        var method = (getConfig("universalMethod", "GET") || "GET").toUpperCase();
+        var urlTemplate = getConfig("universalUrlTemplate", "");
+        var headersJson = getConfig("universalHeaders", "{}");
+        var bodyTemplate = getConfig("universalBodyTemplate", "");
+        var responseExtract = getConfig("universalResponseExtract", "");
+        var apiKey = getConfig("ttsApiKey", "");
+
+        // URL 模板为空的话，用 endpoint 作为基础地址拼一下
+        if (!urlTemplate) {
+            if (method === "GET") {
+                urlTemplate = endpoint.replace(/\/+$/, "") +
+                    "?text={{text}}&voice={{voice}}&speed={{speed}}&volume={{volume}}&pitch={{pitch}}";
+            } else {
+                urlTemplate = endpoint;
+            }
+        }
+
+        MoRead.log("[CustomTTS] 方法: " + method);
+        MoRead.log("[CustomTTS] URL 模板: " + urlTemplate);
+
+        MoRead.hook("tts.synthesize", function(p) {
+            var text = p.text || "";
+            if (!text) return null;
+
+            // 收集所有变量
+            var speedVal = p.speed || 1.0;
+            var volumeVal = p.volume || 1.0;
+            var pitchVal = p.pitch || 1.0;
+            var vars = {
+                text: encodeURIComponent(text),
+                rawText: text,
+                voice: encodeURIComponent(p.voice || ""),
+                rawVoice: p.voice || "",
+                speed: speedVal,
+                speed100: Math.round(speedVal * 100),
+                speedInt: Math.round(speedVal),
+                volume: volumeVal,
+                volume100: Math.round(volumeVal * 100),
+                volumeInt: Math.round(volumeVal),
+                pitch: pitchVal,
+                pitch100: Math.round(pitchVal * 100),
+                pitchInt: Math.round(pitchVal),
+                model: encodeURIComponent(p.model || ""),
+                rawModel: p.model || "",
+                format: p.responseFormat || "mp3"
+            };
+
+            // 渲染 URL
+            var url = renderTemplate(urlTemplate, vars);
+
+            // 渲染请求头
+            var headers = {};
+            try {
+                if (headersJson && headersJson.trim()) {
+                    var parsedHeaders = JSON.parse(headersJson);
+                    for (var hk in parsedHeaders) {
+                        if (parsedHeaders.hasOwnProperty(hk)) {
+                            headers[hk] = renderTemplate(parsedHeaders[hk], vars);
+                        }
+                    }
+                }
+            } catch (e) {
+                MoRead.log("[CustomTTS] ⚠️ 请求头 JSON 解析失败: " + e.message);
+            }
+            if (apiKey && !headers["Authorization"]) {
+                headers["Authorization"] = "Bearer " + apiKey;
+            }
+            if (method === "POST" && !headers["Content-Type"]) {
+                headers["Content-Type"] = "application/json";
+            }
+
+            var preview = text.length > 60 ? text.substring(0, 60) + "..." : text;
+            MoRead.log("[CustomTTS] 合成: \"" + preview + "\" voice=" + (p.voice || "(自动)"));
+
+            try {
+                var resp;
+
+                if (method === "GET") {
+                    resp = MoRead.httpGet(url, headers);
+                } else {
+                    // POST / PUT 等
+                    var body = bodyTemplate ? renderTemplate(bodyTemplate, vars) : "";
+                    resp = MoRead.httpPost(url, body, headers["Content-Type"] || "application/json", headers);
+                }
+
+                if (!resp || !resp.ok) {
+                    var status = resp ? resp.status : "no response";
+                    MoRead.log("[CustomTTS] 请求失败: HTTP " + status);
+                    if (resp && resp.body) {
+                        MoRead.log("[CustomTTS] 响应: " + resp.body.substring(0, 200));
+                    }
+                    return null;
+                }
+
+                var result = extractAudio(resp.body, responseExtract, p.responseFormat || "mp3");
+                if (result) {
+                    MoRead.log("[CustomTTS] 合成成功, 音频长度: " + result.audio.length);
+                    return JSON.stringify(result);
+                }
+
+                MoRead.log("[CustomTTS] 无法从响应中提取音频数据");
+                if (resp.body && resp.body.length < 500) {
+                    MoRead.log("[CustomTTS] 响应内容: " + resp.body);
+                }
+                return null;
+
+            } catch (e) {
+                MoRead.log("[CustomTTS] 异常: " + e.message);
+                return null;
+            }
+        });
+
+        MoRead.log("[CustomTTS] 已注册 hook: tts.synthesize (万能转发器模式) ✓");
+        return;
+    }
+
+    // ============== OpenAI 兼容模式（默认） ==============
     MoRead.hook("tts.synthesize", function(p) {
         var text = p.text || "";
         if (!text) return null;
 
-        var voice = (p.voice || getConfig("ttsDefaultVoice", "alloy")).trim();
-        var model = p.model || getConfig("ttsModel", "cosyvoice-v1");
-        var format = p.responseFormat || getConfig("ttsFormat", "mp3");
+        var voice = getConfig("ttsDefaultVoice", "");
+        var model = getConfig("ttsModel", "");
+        var format = getConfig("ttsFormat", "");
         var apiKey = getConfig("ttsApiKey", "");
         var speed = p.speed || 1.0;
 
-        var preview = text.length > 60 ? text.substring(0, 60) + "..." : text;
-        MoRead.log("[CustomTTS] 合成: \"" + preview + "\" voice=" + voice + " model=" + model);
+        if (p.voice) voice = p.voice;
+        if (p.model) model = p.model;
+        if (p.responseFormat) format = p.responseFormat;
 
-        // 构建请求体（OpenAI 兼容格式）
-        var bodyObj = {
-            model: model,
-            input: text,
-            voice: voice,
-            response_format: format
-        };
-        if (speed && speed !== 1.0) {
-            bodyObj.speed = speed;
-        }
+        var preview = text.length > 60 ? text.substring(0, 60) + "..." : text;
+        MoRead.log("[CustomTTS] 合成: \"" + preview + "\" voice=" + (voice || "(自动)") + " model=" + (model || "(自动)"));
+
+        var bodyObj = { input: text };
+        if (model) bodyObj.model = model;
+        if (voice) bodyObj.voice = voice;
+        if (format) bodyObj.response_format = format;
+        if (speed && speed !== 1.0) bodyObj.speed = speed;
         var body = JSON.stringify(bodyObj);
 
-        // 构建请求头
-        var headers = {
-            "Content-Type": "application/json"
-        };
-        if (apiKey) {
-            headers["Authorization"] = "Bearer " + apiKey;
-        }
+        var headers = { "Content-Type": "application/json" };
+        if (apiKey) headers["Authorization"] = "Bearer " + apiKey;
 
-        // 确保端点不以 / 结尾
         var baseUrl = endpoint.replace(/\/+$/, "");
         var url = baseUrl + "/v1/audio/speech";
 
@@ -85,42 +280,15 @@ function initCustomTTS() {
                 var status = resp ? resp.status : "no response";
                 MoRead.log("[CustomTTS] 请求失败: HTTP " + status);
                 if (resp && resp.body) {
-                    var errPreview = resp.body.substring(0, 200);
-                    MoRead.log("[CustomTTS] 响应: " + errPreview);
+                    MoRead.log("[CustomTTS] 响应: " + resp.body.substring(0, 200));
                 }
-                return null; // 回退到内置 TTS
+                return null;
             }
 
-            // 尝试解析 JSON 响应 { audio: base64, mediaType: "..." }
-            try {
-                var json = JSON.parse(resp.body);
-                if (json.audio || json.data) {
-                    MoRead.log("[CustomTTS] 合成成功 (JSON 格式)");
-                    return JSON.stringify({
-                        audio: json.audio || json.data,
-                        mediaType: json.mediaType || json.format || ("audio/" + format)
-                    });
-                }
-            } catch (e) {
-                // 不是 JSON，可能是直接返回二进制的 base64
-            }
-
-            // 如果响应体看起来像 base64，直接使用
-            if (resp.body && resp.body.length > 0) {
-                // 简单检测：检查是否为 base64 字符
-                var b64test = resp.body.replace(/\s/g, "");
-                if (/^[A-Za-z0-9+/=]+$/.test(b64test) && b64test.length > 100) {
-                    MoRead.log("[CustomTTS] 合成成功 (base64 格式, 长度=" + b64test.length + ")");
-                    return JSON.stringify({
-                        audio: b64test,
-                        mediaType: "audio/" + format
-                    });
-                }
-                // 如果响应体较短，可能是错误信息
-                if (resp.body.length < 500) {
-                    MoRead.log("[CustomTTS] 响应内容异常: " + resp.body.substring(0, 200));
-                    return null;
-                }
+            var result = extractAudio(resp.body, "", format);
+            if (result) {
+                MoRead.log("[CustomTTS] 合成成功 (OpenAI 模式)");
+                return JSON.stringify(result);
             }
 
             MoRead.log("[CustomTTS] 无法解析响应格式");
@@ -132,7 +300,7 @@ function initCustomTTS() {
         }
     });
 
-    MoRead.log("[CustomTTS] 已注册 hook: tts.synthesize ✓");
+    MoRead.log("[CustomTTS] 已注册 hook: tts.synthesize (OpenAI 模式) ✓");
 }
 
 // ------------------------------------------------------------
@@ -141,6 +309,90 @@ function initCustomTTS() {
 function initCustomVoices() {
     if (!isEnabled("enableCustomVoices")) return;
 
+    var source = getConfig("voicesSource", "static"); // static / dynamic
+
+    // ============== 动态拉取模式 ==============
+    if (source === "dynamic") {
+        var voicesUrl = getConfig("dynamicVoicesUrl", "");
+        var voicesExtract = getConfig("dynamicVoicesExtract", ""); // 提取路径
+        var voiceIdField = getConfig("dynamicVoiceIdField", "voiceId");
+        var voiceNameField = getConfig("dynamicVoiceNameField", "displayName");
+        var voicesHeadersJson = getConfig("dynamicVoicesHeaders", "{}");
+
+        if (!voicesUrl) {
+            MoRead.log("[CustomVoices] 动态模式但未配置 URL，跳过");
+            return;
+        }
+
+        MoRead.log("[CustomVoices] 动态拉取: " + voicesUrl);
+
+        // 拉取音色列表
+        var voices = null;
+        try {
+            var headers = {};
+            if (voicesHeadersJson && voicesHeadersJson.trim()) {
+                headers = JSON.parse(voicesHeadersJson);
+            }
+            var apiKey = getConfig("ttsApiKey", "");
+            if (apiKey) headers["Authorization"] = "Bearer " + apiKey;
+
+            var resp = MoRead.httpGet(voicesUrl, headers);
+            if (!resp || !resp.ok) {
+                MoRead.log("[CustomVoices] 拉取失败: HTTP " + (resp ? resp.status : "no response"));
+                return;
+            }
+
+            var json = JSON.parse(resp.body);
+
+            // 按路径提取数组
+            var arr = json;
+            if (voicesExtract && voicesExtract.length > 0) {
+                var parts = voicesExtract.split(".");
+                for (var i = 0; i < parts.length; i++) {
+                    if (arr === null || arr === undefined) break;
+                    arr = arr[parts[i]];
+                }
+            }
+
+            if (!arr || !arr.length) {
+                MoRead.log("[CustomVoices] 音色列表为空");
+                return;
+            }
+
+            // 转换成标准格式
+            voices = [];
+            for (var j = 0; j < arr.length; j++) {
+                var item = arr[j];
+                var vid = item[voiceIdField] || item.id || item.voice_id || item.voiceId || "";
+                var vname = item[voiceNameField] || item.name || item.display_name || item.displayName || vid;
+                if (vid) {
+                    voices.push({
+                        voiceId: vid,
+                        displayName: vname,
+                        gender: item.gender || "UNKNOWN",
+                        tags: item.tags || ""
+                    });
+                }
+            }
+
+            MoRead.log("[CustomVoices] 动态加载 " + voices.length + " 个音色");
+
+        } catch (e) {
+            MoRead.log("[CustomVoices] 动态拉取异常: " + e.message);
+            return;
+        }
+
+        if (voices && voices.length > 0) {
+            MoRead.hook("tts.voices", function(p) {
+                MoRead.log("[CustomVoices] 返回 " + voices.length + " 个音色（动态）");
+                return JSON.stringify(voices);
+            });
+            MoRead.log("[CustomVoices] 已注册 hook: tts.voices (动态模式) ✓");
+        }
+        return;
+    }
+
+    // ============== 静态配置模式（默认） ==============
     var voicesJson = getConfig("customVoices", "");
     if (!voicesJson) {
         MoRead.log("[CustomVoices] 未配置音色列表，跳过");
@@ -167,7 +419,7 @@ function initCustomVoices() {
         return JSON.stringify(voices);
     });
 
-    MoRead.log("[CustomVoices] 已注册 hook: tts.voices ✓");
+    MoRead.log("[CustomVoices] 已注册 hook: tts.voices (静态模式) ✓");
 }
 
 // ------------------------------------------------------------
@@ -184,7 +436,6 @@ function initCustomSegmenter() {
     MoRead.log("[CustomSegmenter] 终止标点: " + terminators);
     MoRead.log("[CustomSegmenter] 次级停顿: " + softBreaks);
 
-    // 收引号/括号字符，断句时归前句
     var closers = "」』”'\"'）)】]〕〉》";
 
     function isTerminator(ch) {
@@ -221,18 +472,15 @@ function initCustomSegmenter() {
         var lineStart = 0;
         var len = body.length;
 
-        // 按行处理
         while (lineStart <= len) {
             var newline = body.indexOf('\n', lineStart);
             var lineEnd = newline < 0 ? len : newline;
 
-            // 处理一行内的断句
             var start = lineStart;
             var i = lineStart;
 
             while (i < lineEnd) {
                 if (isTerminator(body[i])) {
-                    // 找到终止标点，往后吃掉收引号
                     var end = i + 1;
                     while (end < lineEnd && (isTerminator(body[end]) || isCloser(body[end]))) {
                         end++;
@@ -245,7 +493,6 @@ function initCustomSegmenter() {
                 }
             }
 
-            // 行尾剩余部分
             if (start < lineEnd) {
                 addClamped(body, start, lineEnd, max, spans);
             }
@@ -258,7 +505,6 @@ function initCustomSegmenter() {
         return JSON.stringify(spans);
     });
 
-    // 辅助：超长句在次级停顿处折分
     function addClamped(body, rawStart, rawEnd, maxChars, out) {
         var trimmed = trimRange(body, rawStart, rawEnd);
         var start = trimmed.start;
@@ -269,7 +515,6 @@ function initCustomSegmenter() {
         while (end - cursor > maxChars) {
             var windowEnd = cursor + maxChars;
             var cut = -1;
-            // 从窗口尾部向前找次级停顿；切点不早于窗口 1/3 处
             var k = windowEnd;
             var floor = cursor + Math.floor(maxChars / 3);
             while (k > floor) {
@@ -279,7 +524,7 @@ function initCustomSegmenter() {
                 }
                 k--;
             }
-            if (cut < 0) cut = windowEnd; // 实在找不到就硬切
+            if (cut < 0) cut = windowEnd;
             var t = trimRange(body, cursor, cut);
             if (t.start < t.end) out.push({ start: t.start, end: t.end });
             cursor = cut;
@@ -305,7 +550,7 @@ if (isEnabled("enableCustomTTS")) activeHooks.push("tts.synthesize");
 if (isEnabled("enableCustomVoices")) activeHooks.push("tts.voices");
 if (isEnabled("enableCustomSegmenter")) activeHooks.push("listen.sentence");
 
-MoRead.log("TTS 增强模块 v1.0.0 加载完成");
+MoRead.log("TTS 增强模块 v1.1.0 加载完成");
 if (activeHooks.length > 0) {
     MoRead.log("已激活 hook: " + activeHooks.join(", "));
 } else {

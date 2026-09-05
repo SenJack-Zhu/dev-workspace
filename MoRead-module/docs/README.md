@@ -104,14 +104,23 @@ var v = MoRead.storageGet("key", "default");
 // HTTP 请求
 var resp = MoRead.httpPost(url, body, contentType, headers);
 // resp.ok, resp.status, resp.body
+
+// AI 对话（复用原生配置的所有供应商）
+var reply = MoRead.aiChat("系统提示词", "用户消息", "CHEAP");
+// 多轮对话
+var reply = MoRead.aiChatJSON('[{"role":"system","content":"..."},{"role":"user","content":"..."}]', "CHEAP");
+
+// AI 生图（复用原生生图配置，自动转换提示词格式）
+var imgBase64 = MoRead.aiGenerateImage("提示词", 1, "1024x1024");
+var imgsJson = MoRead.aiGenerateImages("提示词", 4, "1536x1024");
 ```
 
 ## 内置模块
 
 | 模块 | 版本 | 描述 | 钩子 |
 |------|:---:|------|------|
-| **文本精校** (text-proofread) | v1.1.0 | 标点规范化、错别字替换、自定义正则替换、空白清理 | `text.display`, `text.preprocess` |
-| **TTS 增强** (tts-enhance) | v1.0.0 | 自定义 TTS 端点、音色列表、断句规则 | `tts.synthesize`, `tts.voices`, `listen.sentence` |
+| **文本精校** (text-proofread) | v1.1.1 | 标点规范化、错别字替换、自定义正则替换、空白清理 | `text.display`, `text.preprocess` |
+| **TTS 增强** (tts-enhance) | v1.1.0 | 自定义 TTS 端点（OpenAI/万能转发器）、音色列表、断句规则 | `tts.synthesize`, `tts.voices`, `listen.sentence` |
 
 内置模块不可删除，重启/重新加载后自动恢复。
 
@@ -119,7 +128,7 @@ var resp = MoRead.httpPost(url, body, contentType, headers);
 
 | 模块 | 版本 | 描述 | 钩子 |
 |------|:---:|------|------|
-| **智能文本理解** (smart-text) | v0.2.0 | AI 辅助自增长知识库，智能区分对话与专有名词，越读越准 | `dialogue.segment` |
+| **智能文本理解** (smart-text) | v0.3.0 | AI 辅助自增长知识库，智能区分对话与专有名词，越读越准（支持原生 AI） | `dialogue.segment` |
 | **提示词管理器** (prompt-manager) | v0.1.0 | 集中管理所有 AI 提示词，支持酒馆角色卡导入 | `prompt.audiobook.script.system`, `prompt.annotation.proactive.system` |
 
 可选模块需要手动导入，不内置。
