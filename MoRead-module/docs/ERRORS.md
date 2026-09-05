@@ -45,7 +45,7 @@
 | # | 错误类型 | 症状 | 检查方法 | 修复方式 |
 |---|---------|------|----------|----------|
 | 1 | 变量声明写到函数参数里 | `Syntax error: Expecting an argument` / `Expecting ')'` | 检查新增的 `val` / `var` 是不是在 `fun(...)` 的括号内 | 把变量声明移到函数调用外面 |
-| 2 | 缺少 import | `Unresolved reference: Spacer` / `Surface` / 其他 Compose 组件 | 新增用了 Compose 组件时，检查 import 区有没有对应类 | 加上 `import androidx.compose.foundation.layout.Spacer` 等 |
+| 2 | 缺少 import | `Unresolved reference: Spacer` / `Surface` / `width` / `weight` 等 | 新增用了 Compose 组件或 modifier 时，检查 import 区有没有对应类/扩展函数 | 组件加 `import androidx.compose.foundation.layout.Spacer` 等；modifier 加 `import androidx.compose.foundation.layout.width` 等 |
 | 3 | Composable 上下文错误 | `@Composable invocations can only happen from the context of a @Composable function` | 检查是不是在非 Composable 函数里调用了 Composable | 确保调用链上都有 `@Composable` 注解 |
 
 ### 2. 类型 / 签名类
@@ -83,12 +83,18 @@
 - **修复**：把变量声明移到 `chat()` 调用外面，先声明变量，再在 `chat()` 里引用
 - **相关文件**：`app/src/main/java/com/mozhi/reader/ai/companion/ProactiveAnnotationService.kt`
 
-### 2026-09-05 — ModuleSettingsScreen 缺少 import
+### 2026-09-05 — ModuleSettingsScreen 缺少 import（多次）
 
-- **错误**：`Spacer` 和 `Surface` 未导入
-- **症状**：`Unresolved reference 'Spacer'` / `Unresolved reference 'Surface'`
-- **原因**：新增 UI 代码时用了 Compose 组件但忘了加 import
-- **修复**：补上 `import androidx.compose.foundation.layout.Spacer` 和 `import androidx.compose.material3.Surface`
+- **错误 1**：`Spacer` 和 `Surface` 未导入
+  - **症状**：`Unresolved reference 'Spacer'` / `Unresolved reference 'Surface'`
+  - **修复**：补上 `import androidx.compose.foundation.layout.Spacer` 和 `import androidx.compose.material3.Surface`
+
+- **错误 2**：`Modifier.width` 和 `Modifier.weight` 未导入
+  - **症状**：`Unresolved reference 'width'`（编译可能只报第一个错，`weight` 也会跟着挂）
+  - **原因**：Compose 的 modifier 扩展函数需要单独 import，不是有了 `Modifier` 就自动有 `width`/`weight`
+  - **修复**：补上 `import androidx.compose.foundation.layout.width` 和 `import androidx.compose.foundation.layout.weight`
+
+- **经验**：新增 Compose UI 代码时，除了组件（`Spacer`/`Surface` 等），**modifier 扩展（`width`/`weight`/`height` 等）也要检查有没有 import**
 - **相关文件**：`app/src/main/java/com/mozhi/reader/feature/settings/ModuleSettingsScreen.kt`
 
 ### 2026-09-04 — ModuleSettingsViewModel 废弃类引用
