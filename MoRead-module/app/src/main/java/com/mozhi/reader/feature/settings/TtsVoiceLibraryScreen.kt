@@ -2,6 +2,8 @@ package com.mozhi.reader.feature.settings
 
 import android.media.MediaPlayer
 import android.net.Uri
+import org.json.JSONArray
+import org.json.JSONObject
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -968,7 +970,7 @@ private object VoiceJson {
      *  - 简单数组: [{id, name, ...}]
      */
     private fun decodeFlexible(raw: String): List<TtsVoiceEntity> {
-        val root = org.json.JSONObject(raw)
+        val root = JSONObject(raw)
         val list = mutableListOf<TtsVoiceEntity>()
 
         // 找音色数组：可能在 data.catalog（字典）或 data.voices（数组）或根数组
@@ -1009,7 +1011,7 @@ private object VoiceJson {
         // 如果还没找到，看看根本身是不是数组
         if (arrays.isEmpty()) {
             try {
-                val rootArr = org.json.JSONArray(raw)
+                val rootArr = JSONArray(raw)
                 arrays.add(rootArr)
             } catch (_: Exception) {}
         }
