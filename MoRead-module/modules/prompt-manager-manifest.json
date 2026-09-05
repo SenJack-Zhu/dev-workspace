@@ -1,0 +1,51 @@
+{
+  "name": "prompt-manager",
+  "displayName": "提示词管理器",
+  "version": "0.1.0",
+  "author": "MoRead Modules",
+  "description": "集中管理所有 AI 功能的提示词，支持自定义覆盖和酒馆角色卡导入映射",
+  "settings": [
+    {
+      "key": "enableAudiobookScript",
+      "label": "自定义有声书剧本提示词",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "key": "audiobookScriptPrompt",
+      "label": "有声书剧本 System Prompt",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "key": "enableProactiveAnnotation",
+      "label": "自定义随读段评提示词",
+      "type": "bool",
+      "default": "false"
+    },
+    {
+      "key": "proactiveAnnotationPrompt",
+      "label": "随读段评 System Prompt",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "key": "tavernCardJson",
+      "label": "酒馆角色卡 JSON（粘贴后自动映射）",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "key": "characterName",
+      "label": "角色名称（从角色卡提取）",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "key": "characterPersonality",
+      "label": "角色性格/人设（从角色卡提取）",
+      "type": "string",
+      "default": ""
+    }
+  ]
+}

@@ -13,6 +13,7 @@ import com.mozhi.reader.core.datastore.audiobookRevision
 import com.mozhi.reader.core.library.AudiobookRepository
 import com.mozhi.reader.core.library.AudiobookRoleKind
 import com.mozhi.reader.core.library.LibraryRepository
+import com.mozhi.reader.modules.HookPoints
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.first
@@ -145,10 +146,7 @@ class AudiobookScriptAgent @Inject constructor(
             }
         }
         val targetIds = batch.targetIndices.sorted().joinToString(",")
-        val history = listOf(
-            ChatMessage(
-                ChatRole.SYSTEM,
-                """
+        val defaultSystemPrompt = """
                 你是中文小说有声书的对白归因与表演标注专家。程序已经锁定对白边界，并把对白嵌入连续原文：
                 - target="true" 的 dialogue 必须标注；存在 locked_speaker 时，role 必须原样复制该名称，禁止修改，但仍要判断情绪和表演方式。
                 - 按证据优先级判断说话人：对白前后明确“某人说/问/答” > 同段动作与称呼 > 代词与人物指代 > 连续对话的问答、轮替和话题承接 > 规则猜测。
@@ -161,7 +159,17 @@ class AudiobookScriptAgent @Inject constructor(
                 {"assignments":[{"segment_id":1,"role":"角色表中的精确名称","confidence":0.92,"evidence":"后置‘苏晚说’","emotion":"中性","instruction":"轻声，句末稍停"}]}
                 每个指定 segment_id 必须输出且只能输出一次，不得输出其他 ID。
                 """.trimIndent()
-            ),
+
+        // ── Module hook: prompt.audiobook.script.system ──
+        val systemPrompt = HookPoints.callNullable<String>("prompt.audiobook.script.system", mapOf(
+            "default" to defaultSystemPrompt,
+            "bookId" to bookId,
+            "chapterTitle" to chapterTitle,
+            "roleCount" to roles.size
+        )) ?: defaultSystemPrompt
+
+        val history = listOf(
+            ChatMessage(ChatRole.SYSTEM, systemPrompt),
             ChatMessage(
                 ChatRole.USER,
                 """

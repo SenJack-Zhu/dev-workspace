@@ -15,6 +15,7 @@ import com.mozhi.reader.core.library.AnnotationMedia
 import com.mozhi.reader.core.library.AnnotationRepository
 import com.mozhi.reader.core.library.BookQuoteLocator
 import com.mozhi.reader.core.library.LibraryRepository
+import com.mozhi.reader.modules.HookPoints
 import com.mozhi.reader.core.library.QuoteChapter
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -89,14 +90,22 @@ class ProactiveAnnotationService @Inject constructor(
         val resolved = clientFactory.forRole(ModelRole.CHEAP)
         val raw = resolved.client.chat(
             messages = listOf(
-                ChatMessage(
-                    ChatRole.SYSTEM,
-                    """
-                    你是阅读应用的随读段评编辑。只根据用户刚读完的这一章写批注，绝不引用或暗示后续剧情。
+val defaultSystemPrompt = """
+你是阅读应用的随读段评编辑。只根据用户刚读完的这一章写批注，绝不引用或暗示后续剧情。
                     选择最多 ${allowance.maxAnnotations} 段值得回应的原文，quote 必须逐字复制自输入正文，note 用角色口吻写简短中文段评。
                     style 只能是 HIGHLIGHT、UNDERLINE、WAVY。voice 仅在适合像私语一样说出时为 true；image_prompt 仅在值得配图时给中文提示词。
                     只输出 JSON：{"annotations":[{"quote":"原文","note":"段评","style":"HIGHLIGHT","voice":false,"image_prompt":null}]}
-                    """.trimIndent()
+""".trimIndent()
+
+                // ── Module hook: prompt.annotation.proactive.system ──
+                val systemPrompt = HookPoints.callNullable<String>("prompt.annotation.proactive.system", mapOf(
+                    "default" to defaultSystemPrompt,
+                    "bookId" to bookId,
+                    "chapterIndex" to chapterIndex,
+                    "maxAnnotations" to allowance.maxAnnotations
+                )) ?: defaultSystemPrompt
+
+                ChatMessage(ChatRole.SYSTEM, systemPrompt)
                 ),
                 ChatMessage(
                     ChatRole.USER,
