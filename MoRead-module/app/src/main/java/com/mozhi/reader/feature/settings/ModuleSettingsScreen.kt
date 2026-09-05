@@ -96,6 +96,7 @@ fun ModuleSettingsScreen(
 
     val viewingSettingsPackage by viewModel.viewingSettingsPackage.collectAsStateWithLifecycle()
     val packageSettings by viewModel.packageSettings.collectAsStateWithLifecycle()
+    val settingValues by viewModel.settingValues.collectAsStateWithLifecycle()
 
     // SAF launchers
     val importPicker = rememberLauncherForActivityResult(
@@ -580,7 +581,7 @@ fun ModuleSettingsScreen(
                             val label = setting.optString("label", key)
                             val type = setting.optString("type", "string")
                             val default = setting.optString("default", "")
-                            val currentVal = viewModel.getConfigValue(key, default)
+                            val currentVal = settingValues[key] ?: default
 
                             when (type) {
                                 "password" -> {

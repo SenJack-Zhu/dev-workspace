@@ -93,6 +93,9 @@ class ModuleSettingsViewModel @Inject constructor(
     private val _packageSettings = MutableStateFlow<List<Pair<String, JSONObject>>>(emptyList())
     val packageSettings: StateFlow<List<Pair<String, JSONObject>>> = _packageSettings.asStateFlow()
 
+    private val _settingValues = MutableStateFlow<Map<String, String>>(emptyMap())
+    val settingValues: StateFlow<Map<String, String>> = _settingValues.asStateFlow()
+
     val moduleDirPath: String get() = moduleImporter.moduleDir.absolutePath
     val packageName: String get() = app.packageName
 
@@ -406,19 +409,26 @@ class ModuleSettingsViewModel @Inject constructor(
             val settings = moduleImporter.getPackageSettings(packageName)
             _viewingSettingsPackage.value = packageName
             _packageSettings.value = settings
+            // 初始化设置值缓存，让 UI 能响应式更新
+            val values = settings.associate { (key, setting) ->
+                key to moduleImporter.getConfigValue(key, setting.optString("default", ""))
+            }
+            _settingValues.value = values
         }
     }
 
     fun closePackageSettings() {
         _viewingSettingsPackage.value = null
         _packageSettings.value = emptyList()
+        _settingValues.value = emptyMap()
     }
 
     fun setSettingValue(key: String, value: String) {
+        _settingValues.value = _settingValues.value.toMutableMap().apply {
+            put(key, value)
+        }
         viewModelScope.launch(Dispatchers.IO) {
             moduleImporter.setConfigValue(key, value)
-            // No need to update local state — the UI reads current value
-            // directly from getConfigValue() on each render
         }
     }
 
