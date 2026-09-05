@@ -77,6 +77,8 @@ class JsEngine @Inject constructor(
                     pcmToWav: function(b64, sr) { return b.pcmToWav(b64, sr || 24000); },
                     aiChat: function(system, user, role) { return b.aiChat(system || '', user || '', role || null); },
                     aiChatJSON: function(messages, role) { return b.aiChatJSON(messages || '[]', role || null); },
+                    aiGenerateImage: function(prompt, count, size) { return b.aiGenerateImage(prompt || '', count || 1, size || null); },
+                    aiGenerateImages: function(prompt, count, size) { return b.aiGenerateImages(prompt || '', count || 1, size || null); },
                     getModuleDir: function() { return b.moduleDirPath(); },
                     getAppVersion: function() { return b.getAppVersion(); },
                     reload: function() { return b.reload(); }

@@ -246,6 +246,65 @@ class ModuleApi @Inject constructor(
         }
     }
 
+    // ── Image generation (reuses native image providers) ──────────
+
+    /**
+     * JS: MoRead.aiGenerateImage(prompt, count, size) → String?
+     *
+     * 调用原生配置好的生图服务，返回第一张图的 base64（PNG/JPEG）。
+     * prompt：提示词（中文/英文均可，会自动转换为对应格式）
+     * count：生成数量（默认 1）
+     * size：尺寸，如 "1024x1024"（空则用默认）
+     * 返回 base64 字符串，失败返回 null。
+     */
+    fun aiGenerateImage(prompt: String, count: Int, size: String?): String? {
+        return try {
+            runBlocking {
+                val resolved = aiClientFactory.imageGeneration()
+                val images = resolved.client.generateImages(
+                    prompt = prompt,
+                    count = count.coerceAtLeast(1),
+                    size = size?.takeIf { it.isNotBlank() }
+                )
+                // 取第一张图，优先 bytes，否则 materialize
+                val first = images.firstOrNull() ?: return@runBlocking null
+                val bytes = first.bytes ?: resolved.client.materializeImage(first)
+                android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+            }
+        } catch (e: Exception) {
+            val moduleName = currentModuleName.get() ?: "unknown"
+            hookRegistry.log("[Module:$moduleName] aiGenerateImage error: ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * JS: MoRead.aiGenerateImages(prompt, count, size) → String? (JSON array of base64)
+     *
+     * 生成多张图，返回 JSON 数组 ["base64_1", "base64_2", ...]
+     */
+    fun aiGenerateImages(prompt: String, count: Int, size: String?): String? {
+        return try {
+            runBlocking {
+                val resolved = aiClientFactory.imageGeneration()
+                val images = resolved.client.generateImages(
+                    prompt = prompt,
+                    count = count.coerceAtLeast(1),
+                    size = size?.takeIf { it.isNotBlank() }
+                )
+                val base64List = images.map { img ->
+                    val bytes = img.bytes ?: resolved.client.materializeImage(img)
+                    android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                }
+                org.json.JSONArray(base64List).toString()
+            }
+        } catch (e: Exception) {
+            val moduleName = currentModuleName.get() ?: "unknown"
+            hookRegistry.log("[Module:$moduleName] aiGenerateImages error: ${e.message}")
+            null
+        }
+    }
+
     // ── Config (shared JSON in modules/config.json) ────────────────
 
     fun configGet(key: String, default: String): String {
