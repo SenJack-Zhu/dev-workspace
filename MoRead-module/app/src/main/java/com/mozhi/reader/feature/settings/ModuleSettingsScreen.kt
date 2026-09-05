@@ -36,8 +36,9 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Upload
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -613,40 +614,80 @@ fun ModuleSettingsScreen(
                                     }
                                 }
                                 "select" -> {
-                                    val options = mutableListOf<String>()
+                                    // 解析选项：支持三种格式
+                                    // 1. JSON 数组 ["a","b","c"]
+                                    // 2. 管道字符串 "a|b|c"（纯值）
+                                    // 3. 值|标签对，逗号分隔 "a|显示A,b|显示B"
+                                    data class SelectOption(val value: String, val label: String)
+                                    val options = mutableListOf<SelectOption>()
                                     val arr = setting.optJSONArray("options")
                                     if (arr != null) {
                                         for (i in 0 until arr.length()) {
-                                            options.add(arr.getString(i))
+                                            val v = arr.getString(i)
+                                            options.add(SelectOption(v, v))
+                                        }
+                                    } else {
+                                        val optStr = setting.optString("options", "")
+                                        if (optStr.isNotBlank()) {
+                                            // 判断格式：含逗号且逗号分隔项里含 | → 值|标签 格式
+                                            if (optStr.contains(",") && optStr.contains("|")) {
+                                                optStr.split(",").forEach { item ->
+                                                    val trimmed = item.trim()
+                                                    if (trimmed.isNotBlank()) {
+                                                        val parts = trimmed.split("|", limit = 2)
+                                                        if (parts.size == 2) {
+                                                            options.add(SelectOption(parts[0].trim(), parts[1].trim()))
+                                                        } else {
+                                                            options.add(SelectOption(trimmed, trimmed))
+                                                        }
+                                                    }
+                                                }
+                                            } else {
+                                                // 纯管道分隔
+                                                optStr.split("|").forEach { v ->
+                                                    val trimmed = v.trim()
+                                                    if (trimmed.isNotBlank()) options.add(SelectOption(trimmed, trimmed))
+                                                }
+                                            }
                                         }
                                     }
+                                    val displayVal = options.find { it.value == currentVal }?.label
+                                        ?: options.find { it.value == default }?.label
+                                        ?: currentVal.ifEmpty { default }
                                     var expanded by remember { mutableStateOf(false) }
 
-                                    Row(
+                                    ExposedDropdownMenuBox(
+                                        expanded = expanded,
+                                        onExpandedChange = { expanded = it },
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .clickable { expanded = true }
-                                            .padding(vertical = 8.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
+                                            .padding(vertical = 4.dp)
                                     ) {
-                                        Column {
-                                            Text(label, style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                            Text(currentVal.ifEmpty { default },
-                                                style = MaterialTheme.typography.bodyMedium)
-                                        }
-                                        Icon(Icons.Outlined.ArrowDropDown, contentDescription = null)
-                                    }
-                                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                                        options.forEach { opt ->
-                                            DropdownMenuItem(
-                                                text = { Text(opt) },
-                                                onClick = {
-                                                    viewModel.setSettingValue(key, opt)
-                                                    expanded = false
-                                                }
-                                            )
+                                        OutlinedTextField(
+                                            value = displayVal,
+                                            onValueChange = {},
+                                            readOnly = true,
+                                            label = { Text(label) },
+                                            trailingIcon = {
+                                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                                            },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .menuAnchor()
+                                        )
+                                        androidx.compose.material3.ExposedDropdownMenu(
+                                            expanded = expanded,
+                                            onDismissRequest = { expanded = false }
+                                        ) {
+                                            options.forEach { opt ->
+                                                DropdownMenuItem(
+                                                    text = { Text(opt.label) },
+                                                    onClick = {
+                                                        viewModel.setSettingValue(key, opt.value)
+                                                        expanded = false
+                                                    }
+                                                )
+                                            }
                                         }
                                     }
                                 }
