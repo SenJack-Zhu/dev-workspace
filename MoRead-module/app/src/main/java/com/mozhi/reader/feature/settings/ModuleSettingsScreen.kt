@@ -182,6 +182,12 @@ fun ModuleSettingsScreen(
             item {
                 MoReadBlock(title = "模块目录（内部存储）") {
                     Text(
+                        text = "包名: ${viewModel.packageName}",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                    )
+                    Text(
                         text = viewModel.moduleDirPath,
                         style = MaterialTheme.typography.bodySmall,
                         fontFamily = FontFamily.Monospace,

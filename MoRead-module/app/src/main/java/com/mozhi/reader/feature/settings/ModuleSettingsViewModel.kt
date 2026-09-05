@@ -67,6 +67,7 @@ class ModuleSettingsViewModel @Inject constructor(
     val pendingExportLogs: StateFlow<Boolean> = _pendingExportLogs.asStateFlow()
 
     val moduleDirPath: String get() = moduleImporter.moduleDir.absolutePath
+    val packageName: String get() = app.packageName
 
     init {
         refresh()
