@@ -45,7 +45,7 @@
 | # | 错误类型 | 症状 | 检查方法 | 修复方式 |
 |---|---------|------|----------|----------|
 | 1 | 变量声明写到函数参数里 | `Syntax error: Expecting an argument` / `Expecting ')'` | 检查新增的 `val` / `var` 是不是在 `fun(...)` 的括号内 | 把变量声明移到函数调用外面 |
-| 2 | 缺少 import | `Unresolved reference: Spacer` / `Surface` / `width` / `weight` 等 | 新增用了 Compose 组件或 modifier 时，检查 import 区有没有对应类/扩展函数 | 组件加 `import androidx.compose.foundation.layout.Spacer` 等；modifier 加 `import androidx.compose.foundation.layout.width` 等 |
+| 2 | 缺少 import / 导错 import | `Unresolved reference: Spacer` / `width` 等；或 `Cannot access 'val RowColumnParentData?.weight': it is internal` | 新增 Compose 组件/modifier 时，检查 import 区；注意 `weight` 等作用域扩展不能单独 import | 顶层扩展加 import；作用域扩展不加 |
 | 3 | Composable 上下文错误 | `@Composable invocations can only happen from the context of a @Composable function` | 检查是不是在非 Composable 函数里调用了 Composable | 确保调用链上都有 `@Composable` 注解 |
 
 ### 2. 类型 / 签名类
@@ -89,10 +89,14 @@
   - **症状**：`Unresolved reference 'Spacer'` / `Unresolved reference 'Surface'`
   - **修复**：补上 `import androidx.compose.foundation.layout.Spacer` 和 `import androidx.compose.material3.Surface`
 
-- **错误 2**：`Modifier.width` 和 `Modifier.weight` 未导入
-  - **症状**：`Unresolved reference 'width'`（编译可能只报第一个错，`weight` 也会跟着挂）
-  - **原因**：Compose 的 modifier 扩展函数需要单独 import，不是有了 `Modifier` 就自动有 `width`/`weight`
-  - **修复**：补上 `import androidx.compose.foundation.layout.width` 和 `import androidx.compose.foundation.layout.weight`
+- **错误 2**：`Modifier.width` 和 `Modifier.weight` 未导入 / 导错了
+  - **症状 1**：`Unresolved reference 'width'` — 缺少 `width` import
+  - **症状 2**：`Cannot access 'val RowColumnParentData?.weight: Float': it is internal in file.` — 给 `weight` 加了 import 反而引到内部属性上了
+  - **原因**：Compose 的 modifier 分两种：
+    - **顶层扩展**（`width`/`height`/`padding`/`size` 等）— 需要单独 import
+    - **作用域扩展**（`weight` 等）— 是 `RowScope`/`ColumnScope` 的成员，在 `Row{}` / `Column{}` lambda 里自动可用，**不能单独 import**
+  - **修复**：`width` 加 import，`weight` 不加 import
+  - **经验**：看到 `RowScope` / `ColumnScope` 相关的 modifier，先确认是不是作用域内的，别乱加 import
 
 - **经验**：新增 Compose UI 代码时，除了组件（`Spacer`/`Surface` 等），**modifier 扩展（`width`/`weight`/`height` 等）也要检查有没有 import**
 - **相关文件**：`app/src/main/java/com/mozhi/reader/feature/settings/ModuleSettingsScreen.kt`
