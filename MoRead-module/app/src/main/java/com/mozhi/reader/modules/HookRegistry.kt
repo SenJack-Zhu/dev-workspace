@@ -2,6 +2,9 @@ package com.mozhi.reader.modules
 
 import javax.inject.Inject
 import javax.inject.Singleton
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * Hook Registry: manages all registered hooks from JS modules.
@@ -15,6 +18,7 @@ class HookRegistry @Inject constructor() {
 
     private val hooks = mutableMapOf<String, MutableList<HookEntry>>()
     private val logCollector = mutableListOf<String>()
+    private val timeFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault())
 
     data class HookEntry(
         val moduleName: String,
@@ -102,7 +106,8 @@ class HookRegistry @Inject constructor() {
      * Logs are automatically pruned to prevent unbounded growth.
      */
     fun log(message: String) {
-        logCollector.add("[${System.currentTimeMillis()}] $message")
+        val time = timeFormat.format(Date())
+        logCollector.add("[$time] $message")
         // Prune: keep last 500 entries
         if (logCollector.size > 500) {
             val removeCount = logCollector.size - 500

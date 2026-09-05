@@ -307,7 +307,7 @@ fun ModuleSettingsScreen(
                                 .verticalScroll(rememberScrollState())
                                 .padding(horizontal = 16.dp, vertical = 4.dp)
                         ) {
-                            logs.takeLast(60).forEach { log ->
+                            logs.takeLast(60).reversed().forEach { log ->
                                 Text(
                                     text = log,
                                     style = MaterialTheme.typography.bodySmall,
