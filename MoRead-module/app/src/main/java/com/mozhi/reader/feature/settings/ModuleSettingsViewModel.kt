@@ -415,7 +415,7 @@ class ModuleSettingsViewModel @Inject constructor(
             _packageSettings.value = settings
             // 初始化设置值缓存，让 UI 能响应式更新
             val values = settings.associate { (key, setting) ->
-                key to moduleImporter.getConfigValue(key, setting.optString("default", ""))
+                key to moduleImporter.getConfigValue(packageName, key, setting.optString("default", ""))
             }
             _settingValues.value = values
             // 过滤该模块的日志
@@ -445,7 +445,8 @@ class ModuleSettingsViewModel @Inject constructor(
             put(key, value)
         }
         viewModelScope.launch(Dispatchers.IO) {
-            moduleImporter.setConfigValue(key, value)
+            val pkgName = _viewingSettingsPackage.value ?: return@launch
+            moduleImporter.setConfigValue(pkgName, key, value)
         }
     }
 
@@ -463,7 +464,7 @@ class ModuleSettingsViewModel @Inject constructor(
         }
     }
 
-    fun getConfigValue(key: String, default: String): String {
-        return moduleImporter.getConfigValue(key, default)
+    fun getConfigValue(packageName: String, key: String, default: String): String {
+        return moduleImporter.getConfigValue(packageName, key, default)
     }
 }

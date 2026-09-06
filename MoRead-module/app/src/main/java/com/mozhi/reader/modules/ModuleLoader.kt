@@ -179,6 +179,7 @@ class ModuleLoader @Inject constructor(
             }
 
             ModuleApi.currentModuleName.set(moduleName)
+            ModuleApi.currentPackageName.set(pkgName)
 
             val success = jsEngine.executeScript(file.absolutePath, fullName)
             if (success) {
@@ -191,6 +192,7 @@ class ModuleLoader @Inject constructor(
         }
 
         ModuleApi.currentModuleName.remove()
+        ModuleApi.currentPackageName.remove()
 
         val message = buildString {
             append("Loaded $successCount modules")
@@ -223,11 +225,13 @@ class ModuleLoader @Inject constructor(
     @Synchronized
     fun reloadModule(moduleName: String): Boolean {
         var file = File(moduleDir, "$moduleName.js")
+        var pkgName = moduleName
         if (!file.exists()) {
             moduleDir.listFiles { f -> f.isDirectory }?.forEach { pkgDir ->
                 val candidate = File(pkgDir, "$moduleName.js")
                 if (candidate.exists()) {
                     file = candidate
+                    pkgName = pkgDir.name
                     return@forEach
                 }
             }
@@ -236,8 +240,10 @@ class ModuleLoader @Inject constructor(
 
         hookRegistry.unregisterModule(moduleName)
         ModuleApi.currentModuleName.set(moduleName)
+        ModuleApi.currentPackageName.set(pkgName)
         val success = jsEngine.executeScript(file.absolutePath, moduleName)
         ModuleApi.currentModuleName.remove()
+        ModuleApi.currentPackageName.remove()
 
         if (success && moduleName !in loadedModules) {
             loadedModules.add(moduleName)

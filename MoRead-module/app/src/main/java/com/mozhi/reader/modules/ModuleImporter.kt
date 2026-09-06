@@ -267,7 +267,7 @@ class ModuleImporter @Inject constructor(
         val keys = packageConfig.keys()
         while (keys.hasNext()) {
             val key = keys.next()
-            moduleApi.configSet(key, packageConfig.optString(key, ""))
+            moduleApi.configSet(key, packageConfig.optString(key, ""), packageName)
         }
         hookRegistry.log("[Importer] Merged config from $packageName")
     }
@@ -445,16 +445,18 @@ class ModuleImporter @Inject constructor(
 
     /**
      * Read a config value from the shared config.json.
+     * 自动加上包名前缀，实现模块间隔离。
      */
-    fun getConfigValue(key: String, default: String = ""): String {
-        return moduleApi.configGet(key, default)
+    fun getConfigValue(packageName: String, key: String, default: String = ""): String {
+        return moduleApi.configGet(key, default, packageName)
     }
 
     /**
      * Write a config value to the shared config.json (in-memory + persist).
+     * 自动加上包名前缀，实现模块间隔离。
      */
-    fun setConfigValue(key: String, value: String) {
-        moduleApi.configSet(key, value)
+    fun setConfigValue(packageName: String, key: String, value: String) {
+        moduleApi.configSet(key, value, packageName)
     }
 
     /**

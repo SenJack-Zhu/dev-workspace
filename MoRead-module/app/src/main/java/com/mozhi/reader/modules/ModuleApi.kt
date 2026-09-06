@@ -31,7 +31,18 @@ class ModuleApi @Inject constructor(
 ) {
     companion object {
         val currentModuleName = ThreadLocal<String>()
+        val currentPackageName = ThreadLocal<String>()
         @Volatile var reloadRequested = false
+
+        /**
+         * 给 key 加上包名前缀，实现模块间配置隔离。
+         * 格式："<packageName>:<key>"
+         * 如果没有当前包名（系统调用），返回原始 key。
+         */
+        fun prefixedKey(key: String): String {
+            val pkg = currentPackageName.get()
+            return if (pkg.isNullOrBlank()) key else "$pkg:$key"
+        }
 
         fun pcmToWavBytes(pcm: ByteArray, sampleRate: Int, channels: Int, bitsPerSample: Int): ByteArray {
             val byteRate = sampleRate * channels * bitsPerSample / 8
@@ -307,15 +318,44 @@ class ModuleApi @Inject constructor(
 
     // ── Config (shared JSON in modules/config.json) ────────────────
 
-    fun configGet(key: String, default: String): String {
+    /**
+     * 读取配置值。key 会自动加上包名前缀实现隔离。
+     * 向后兼容：如果带前缀的 key 找不到，会尝试查找不带前缀的旧 key。
+     * @param key 配置项 key（不带前缀）
+     * @param default 默认值
+     * @param packageName 包名，不传则用当前线程的 currentPackageName
+     */
+    fun configGet(key: String, default: String, packageName: String? = null): String {
         loadConfig()
-        return configCache?.optString(key, default) ?: default
+        val prefixed = prefixedKeyWith(key, packageName)
+        val cache = configCache ?: return default
+        // 优先用带前缀的 key
+        if (cache.has(prefixed)) {
+            return cache.optString(prefixed, default)
+        }
+        // 向后兼容：尝试不带前缀的旧 key
+        if (prefixed != key && cache.has(key)) {
+            return cache.optString(key, default)
+        }
+        return default
     }
 
-    fun configSet(key: String, value: String) {
+    /**
+     * 写入配置值。key 会自动加上包名前缀实现隔离。
+     * @param key 配置项 key（不带前缀）
+     * @param value 值
+     * @param packageName 包名，不传则用当前线程的 currentPackageName
+     */
+    fun configSet(key: String, value: String, packageName: String? = null) {
         loadConfig()
-        configCache?.put(key, value)
+        val prefixed = prefixedKeyWith(key, packageName)
+        configCache?.put(prefixed, value)
         saveConfig()
+    }
+
+    private fun prefixedKeyWith(key: String, explicitPackage: String?): String {
+        val pkg = explicitPackage ?: currentPackageName.get()
+        return if (pkg.isNullOrBlank()) key else "$pkg:$key"
     }
 
     fun configSave() {
@@ -329,20 +369,31 @@ class ModuleApi @Inject constructor(
 
     // ── Storage (persistent per-module key-value) ──────────────────
 
-    fun storageGet(key: String, default: String): String {
+    fun storageGet(key: String, default: String, packageName: String? = null): String {
         loadStorage()
-        return storageCache?.optString(key, default) ?: default
+        val prefixed = prefixedKeyWith(key, packageName)
+        val cache = storageCache ?: return default
+        if (cache.has(prefixed)) {
+            return cache.optString(prefixed, default)
+        }
+        // 向后兼容：尝试不带前缀的旧 key
+        if (prefixed != key && cache.has(key)) {
+            return cache.optString(key, default)
+        }
+        return default
     }
 
-    fun storageSet(key: String, value: String) {
+    fun storageSet(key: String, value: String, packageName: String? = null) {
         loadStorage()
-        storageCache?.put(key, value)
+        val prefixed = prefixedKeyWith(key, packageName)
+        storageCache?.put(prefixed, value)
         saveStorage()
     }
 
-    fun storageRemove(key: String) {
+    fun storageRemove(key: String, packageName: String? = null) {
         loadStorage()
-        storageCache?.remove(key)
+        val prefixed = prefixedKeyWith(key, packageName)
+        storageCache?.remove(prefixed)
         saveStorage()
     }
 
