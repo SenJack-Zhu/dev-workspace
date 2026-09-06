@@ -24,8 +24,9 @@ var changeCount = 0;
 // ------------------------------------------------------------
 // 工具函数
 // ------------------------------------------------------------
-function isEnabled(key) {
-    return MoRead.configGet(key, "true") === "true";
+function isEnabled(key, def) {
+    if (def === undefined) def = "true";
+    return MoRead.configGet(key, def) === "true";
 }
 
 function inc() {
@@ -606,7 +607,7 @@ function proofread(text) {
 
 // text.display — 显示文本精校
 MoRead.hook("text.display", function(params) {
-    if (!isEnabled("enableDisplay")) return null;
+    if (!isEnabled("enableDisplay", "false")) return null;
     var text = params.text || "";
     var result = proofread(text);
     MoRead.log("[Display] 精校完成, 修改约 " + changeCount + " 处");

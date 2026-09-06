@@ -1,0 +1,60 @@
+{
+  "name": "smart-text",
+  "displayName": "智能文本理解",
+  "version": "0.3.0",
+  "author": "MoRead Modules",
+  "description": "AI 辅助的自增长知识库，智能区分对话与专有名词，越读越准，最终可脱离 AI 纯规则运行",
+  "settings": [
+    {
+      "key": "enableDialogueSegment",
+      "label": "智能对白切分",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "key": "enableTextPreprocess",
+      "label": "TTS 文本优化（预留）",
+      "type": "bool",
+      "default": "true"
+    },
+    {
+      "key": "aiMode",
+      "label": "AI 学习模式",
+      "type": "select",
+      "options": "off|纯规则（不用 AI）,chapter|逐章学习（读到哪学到哪）,full|全书预扫（一次性扫完整本，预留）",
+      "default": "off"
+    },
+    {
+      "key": "aiProvider",
+      "label": "AI 供应商",
+      "type": "select",
+      "options": "native|使用 App 内置 AI（推荐）,custom|自定义 HTTP 接口",
+      "default": "native"
+    },
+    {
+      "key": "aiRole",
+      "label": "使用的模型档位（仅内置 AI）",
+      "type": "select",
+      "options": "CHEAP|经济档（默认）,SMART|智能档,CHAT|聊天档,SUGGESTION|建议档",
+      "default": "CHEAP"
+    },
+    {
+      "key": "aiEndpoint",
+      "label": "[自定义] AI API 端点",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "key": "aiApiKey",
+      "label": "[自定义] AI API Key",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "key": "aiModel",
+      "label": "[自定义] AI 模型名称",
+      "type": "string",
+      "default": "gpt-4o-mini"
+    }
+  ]
+}

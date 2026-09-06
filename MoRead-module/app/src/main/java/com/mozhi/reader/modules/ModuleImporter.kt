@@ -43,7 +43,8 @@ data class ImportResult(
 @Singleton
 class ModuleImporter @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val hookRegistry: HookRegistry
+    private val hookRegistry: HookRegistry,
+    private val moduleApi: ModuleApi
 ) {
     companion object {
         private const val MODULES_DIR = "modules"
@@ -56,9 +57,6 @@ class ModuleImporter @Inject constructor(
     val moduleDir: File by lazy {
         File(context.filesDir, MODULES_DIR).also { it.mkdirs() }
     }
-
-    /** Shared config file (merged from all imported packages). */
-    private val sharedConfigFile: File by lazy { File(moduleDir, CONFIG_FILE) }
 
     /**
      * Import a .mrm package from a content URI (e.g. from SAF file picker).
@@ -267,13 +265,12 @@ class ModuleImporter @Inject constructor(
      * Existing values are overwritten by the package's values.
      */
     private fun mergeConfig(packageConfig: JSONObject) {
-        val shared = loadSharedConfig()
         val keys = packageConfig.keys()
         while (keys.hasNext()) {
             val key = keys.next()
-            shared.put(key, packageConfig.get(key))
+            moduleApi.configSet(key, packageConfig.optString(key, ""))
         }
-        saveSharedConfig(shared)
+        hookRegistry.log("[Importer] Merged config from $packageName")
     }
 
     /**
@@ -451,23 +448,21 @@ class ModuleImporter @Inject constructor(
      * Read a config value from the shared config.json.
      */
     fun getConfigValue(key: String, default: String = ""): String {
-        return loadSharedConfig().optString(key, default)
+        return moduleApi.configGet(key, default)
     }
 
     /**
      * Write a config value to the shared config.json (in-memory + persist).
      */
     fun setConfigValue(key: String, value: String) {
-        val config = loadSharedConfig()
-        config.put(key, value)
-        saveSharedConfig(config)
+        moduleApi.configSet(key, value)
     }
 
     /**
      * Persist the shared config (no-op if already saved by setConfigValue).
      */
     fun saveConfig() {
-        // Already saved by setConfigValue, but reload from file to be safe
+        moduleApi.configSave()
         hookRegistry.log("[Importer] Config saved")
     }
 
@@ -489,24 +484,6 @@ class ModuleImporter @Inject constructor(
                 file.inputStream().use { it.copyTo(zos) }
                 zos.closeEntry()
             }
-        }
-    }
-
-    // ── Config helpers ──────────────────────────────────────────────
-
-    private fun loadSharedConfig(): JSONObject {
-        return try {
-            if (sharedConfigFile.exists()) JSONObject(sharedConfigFile.readText())
-            else JSONObject()
-        } catch (_: Exception) { JSONObject() }
-    }
-
-    private fun saveSharedConfig(config: JSONObject) {
-        try {
-            sharedConfigFile.writeText(config.toString(2))
-            hookRegistry.log("[Importer] Shared config saved")
-        } catch (e: Exception) {
-            hookRegistry.log("[Importer] Config save error: ${e.message}")
         }
     }
 }

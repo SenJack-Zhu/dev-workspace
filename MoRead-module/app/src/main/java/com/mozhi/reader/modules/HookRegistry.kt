@@ -55,11 +55,15 @@ class HookRegistry @Inject constructor() {
      */
     @Synchronized
     fun <T> call(event: String, params: Map<String, Any?>, default: T): T {
-        val entries = hooks[event] ?: return default
+        val entries = hooks[event]
+        if (entries == null) {
+            return default
+        }
         for (entry in entries) {
             try {
                 val result = entry.callback(params)
                 if (result != null) {
+                    log("[HookRegistry] $event handled by ${entry.moduleName} (result non-null)")
                     @Suppress("UNCHECKED_CAST")
                     return result as T
                 }

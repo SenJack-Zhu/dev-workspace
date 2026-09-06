@@ -1,6 +1,7 @@
 package com.mozhi.reader.feature.settings
 
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -49,6 +50,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -76,6 +79,7 @@ fun ModuleSettingsScreen(
     onBack: () -> Unit,
     viewModel: ModuleSettingsViewModel = hiltViewModel()
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val packages by viewModel.packages.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
@@ -98,6 +102,7 @@ fun ModuleSettingsScreen(
     val viewingSettingsPackage by viewModel.viewingSettingsPackage.collectAsStateWithLifecycle()
     val packageSettings by viewModel.packageSettings.collectAsStateWithLifecycle()
     val settingValues by viewModel.settingValues.collectAsStateWithLifecycle()
+    val moduleLogs by viewModel.moduleLogs.collectAsStateWithLifecycle()
 
     // SAF launchers
     val importPicker = rememberLauncherForActivityResult(
@@ -127,7 +132,7 @@ fun ModuleSettingsScreen(
     }
     LaunchedEffect(message) {
         message?.let {
-            kotlinx.coroutines.delay(3000)
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
             viewModel.clearMessage()
         }
     }
@@ -570,15 +575,33 @@ fun ModuleSettingsScreen(
     // ── Package settings dialog (manifest-declared UI) ───────────
 
     if (viewingSettingsPackage != null) {
+        var settingsTab by remember { mutableStateOf(0) }
         AlertDialog(
             onDismissRequest = { viewModel.closePackageSettings() },
             title = { Text("设置 — $viewingSettingsPackage") },
             text = {
-                if (packageSettings.isEmpty()) {
-                    Text("此模块没有可配置项", style = MaterialTheme.typography.bodyMedium)
-                } else {
-                    Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
-                        packageSettings.forEach { (key, setting) ->
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    TabRow(selectedTabIndex = settingsTab) {
+                        Tab(
+                            selected = settingsTab == 0,
+                            onClick = { settingsTab = 0 },
+                            text = { Text("设置") }
+                        )
+                        Tab(
+                            selected = settingsTab == 1,
+                            onClick = {
+                                settingsTab = 1
+                                viewModel.refreshModuleLogs()
+                            },
+                            text = { Text("日志") }
+                        )
+                    }
+                    if (settingsTab == 0) {
+                        if (packageSettings.isEmpty()) {
+                            Text("此模块没有可配置项", style = MaterialTheme.typography.bodyMedium)
+                        } else {
+                            Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+                                packageSettings.forEach { (key, setting) ->
                             val label = setting.optString("label", key)
                             val type = setting.optString("type", "string")
                             val default = setting.optString("default", "")

@@ -25,7 +25,7 @@ class ModuleLoader @Inject constructor(
         File(context.filesDir, "modules").also { it.mkdirs() }
     }
 
-    private val configFile: File by lazy { File(moduleDir, "config.json") }
+    private val settingsFile: File by lazy { File(moduleDir, "settings.json") }
 
     private val loadedModules = mutableListOf<String>()
 
@@ -34,7 +34,7 @@ class ModuleLoader @Inject constructor(
      * These are restored to internal storage on every load,
      * so users cannot permanently delete them.
      */
-    private val builtInPackages = listOf("text-proofread", "tts-enhance")
+    private val builtInPackages = listOf("text-proofread", "tts-enhance", "smart-text")
 
     // ── Built-in module restoration ────────────────────────────────
 
@@ -109,13 +109,13 @@ class ModuleLoader @Inject constructor(
     }
 
     private fun loadConfig(): JSONObject {
-        return if (configFile.exists()) {
-            try { JSONObject(configFile.readText()) } catch (_: Exception) { JSONObject() }
+        return if (settingsFile.exists()) {
+            try { JSONObject(settingsFile.readText()) } catch (_: Exception) { JSONObject() }
         } else JSONObject()
     }
 
     private fun saveConfig(config: JSONObject) {
-        configFile.writeText(config.toString())
+        settingsFile.writeText(config.toString(2))
     }
 
     // ── Loading ───────────────────────────────────────────────────

@@ -315,6 +315,7 @@ class ModuleApi @Inject constructor(
     fun configSet(key: String, value: String) {
         loadConfig()
         configCache?.put(key, value)
+        saveConfig()
     }
 
     fun configSave() {

@@ -96,6 +96,10 @@ class ModuleSettingsViewModel @Inject constructor(
     private val _settingValues = MutableStateFlow<Map<String, String>>(emptyMap())
     val settingValues: StateFlow<Map<String, String>> = _settingValues.asStateFlow()
 
+    // 当前查看模块的日志（过滤后的）
+    private val _moduleLogs = MutableStateFlow<List<String>>(emptyList())
+    val moduleLogs: StateFlow<List<String>> = _moduleLogs.asStateFlow()
+
     val moduleDirPath: String get() = moduleImporter.moduleDir.absolutePath
     val packageName: String get() = app.packageName
 
@@ -414,7 +418,20 @@ class ModuleSettingsViewModel @Inject constructor(
                 key to moduleImporter.getConfigValue(key, setting.optString("default", ""))
             }
             _settingValues.value = values
+            // 过滤该模块的日志
+            refreshModuleLogs(packageName)
         }
+    }
+
+    fun refreshModuleLogs(packageName: String = _viewingSettingsPackage.value ?: "") {
+        if (packageName.isEmpty()) return
+        val allLogs = hookRegistry.getLogs()
+        val filtered = allLogs.filter { line ->
+            line.contains("[$packageName]") ||
+            line.contains(":$packageName]") ||
+            line.contains("Module:$packageName")
+        }
+        _moduleLogs.value = filtered
     }
 
     fun closePackageSettings() {
@@ -439,8 +456,9 @@ class ModuleSettingsViewModel @Inject constructor(
             val pkgName = _viewingSettingsPackage.value
             if (pkgName != null) {
                 val loadResult = moduleLoader.loadAll()
-                _message.value = "设置已保存\n${loadResult.message}"
+                _message.value = "设置已保存，模块已重载"
             }
+            _viewingSettingsPackage.value = null
             _isLoading.value = false
         }
     }
