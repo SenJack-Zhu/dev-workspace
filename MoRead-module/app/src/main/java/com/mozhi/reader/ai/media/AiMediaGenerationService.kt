@@ -2,12 +2,14 @@ package com.mozhi.reader.ai.media
 
 import android.content.Context
 import android.graphics.BitmapFactory
+import android.util.Base64
 import com.mozhi.reader.ai.client.AiClientFactory
 import com.mozhi.reader.core.database.entity.IllustrationEntity
 import com.mozhi.reader.core.database.entity.ModelRole
 import com.mozhi.reader.core.di.ApplicationScope
 import com.mozhi.reader.core.library.IllustrationRepository
 import com.mozhi.reader.core.speech.SpeechCacheStore
+import com.mozhi.reader.modules.HookPoints
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.security.MessageDigest
@@ -153,6 +155,16 @@ class AiMediaGenerationService @Inject constructor(
     ): CachedSpeech {
         val cleanText = text.trim().take(MAX_SPEECH_CHARS)
         require(cleanText.isNotEmpty()) { "朗读文本不能为空" }
+
+        // ── Module hook: tts.synthesize（优先于原声 TTS）──
+        // 若有模块注册了 tts.synthesize hook，直接让模块接管合成，
+        // 跳过原声 AI 服务配置校验。
+        if (HookPoints.hasHook("tts.synthesize")) {
+            return synthesizeViaModule(
+                bookId, cleanText, voiceId, speed, volume, pitch, format, emotion, instruction
+            )
+        }
+
         val resolved = clientFactory.mediaForRole(ModelRole.TTS)
         val key = speechCacheKey(
             resolved = resolved,
@@ -284,6 +296,90 @@ class AiMediaGenerationService @Inject constructor(
         "flac" -> "audio/flac"
         "aac" -> "audio/aac"
         else -> "audio/mpeg"
+    }
+
+    /**
+     * 通过模块 tts.synthesize hook 合成语音。
+     * 当有模块注册了 tts.synthesize hook 时走这条路径，完全跳过原声 AI 服务配置。
+     */
+    private suspend fun synthesizeViaModule(
+        bookId: Long,
+        text: String,
+        voiceId: String?,
+        speed: Float?,
+        volume: Float?,
+        pitch: Int?,
+        format: String?,
+        emotion: String?,
+        instruction: String?
+    ): CachedSpeech {
+        val key = moduleTtsCacheKey(text, voiceId, speed, volume, pitch, format, emotion, instruction)
+        val directory = speechCache.directoryFor(bookId)
+        // 查缓存
+        val cached = directory.listFiles()?.firstOrNull { it.nameWithoutExtension == key }
+        if (cached != null) {
+            cached.setLastModified(System.currentTimeMillis())
+            return CachedSpeech(cached.absolutePath, mediaTypeForExtension(cached.extension), true)
+        }
+        // 调用模块 hook
+        val hookResult = HookPoints.callNullable<String>("tts.synthesize", mapOf(
+            "text" to text,
+            "voice" to voiceId,
+            "responseFormat" to format,
+            "speed" to speed,
+            "volume" to volume,
+            "pitch" to pitch,
+            "emotion" to emotion,
+            "instruction" to instruction
+        )) ?: throw IllegalStateException("TTS 模块未返回音频数据")
+
+        // 解析返回值（兼容 JSON 对象和纯 base64）
+        val (bytes, mediaType) = try {
+            val json = org.json.JSONObject(hookResult)
+            val audioB64 = json.optString("audio", json.optString("data", ""))
+            val mt = json.optString("mediaType", json.optString("format", "audio/mp3"))
+            require(audioB64.isNotEmpty()) { "模块返回的音频数据为空" }
+            Base64.decode(audioB64, Base64.DEFAULT) to mt
+        } catch (_: org.json.JSONException) {
+            // 纯 base64 字符串
+            val bytes = Base64.decode(hookResult, Base64.DEFAULT)
+            require(bytes.isNotEmpty()) { "模块返回的音频数据为空" }
+            bytes to "audio/mp3"
+        }
+
+        require(bytes.size <= MAX_MEDIA_BYTES) { "生成语音超过 30 MB，已取消缓存" }
+
+        val ext = audioExtension(mediaType, format)
+        val output = File(directory, "$key.$ext")
+        output.writeBytes(bytes)
+        speechCache.enforceBudget()
+        return CachedSpeech(output.absolutePath, mediaType, false)
+    }
+
+    private fun moduleTtsCacheKey(
+        text: String,
+        voiceId: String?,
+        speed: Float?,
+        volume: Float?,
+        pitch: Int?,
+        format: String?,
+        emotion: String?,
+        instruction: String?
+    ): String {
+        val raw = buildString {
+            append("modtts|")
+            append(text)
+            append('|').append(voiceId ?: "")
+            append('|').append(speed ?: "")
+            append('|').append(volume ?: "")
+            append('|').append(pitch ?: "")
+            append('|').append(format ?: "")
+            append('|').append(emotion ?: "")
+            append('|').append(instruction ?: "")
+        }
+        val md = MessageDigest.getInstance("MD5")
+        val digest = md.digest(raw.toByteArray())
+        return digest.joinToString("") { "%02x".format(it) }
     }
 
     private companion object {
