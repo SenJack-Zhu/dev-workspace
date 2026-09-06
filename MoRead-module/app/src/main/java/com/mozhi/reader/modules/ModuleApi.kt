@@ -330,20 +330,70 @@ class ModuleApi @Inject constructor(
 
     /**
      * 读取配置值（带显式包名，供 Kotlin 侧调用）。
+     * 
+     * 改进：支持多种布尔值格式的自动转换和类型兼容性。
+     * 处理场景：
+     * - JSON 中布尔值被保存为 true/false（Boolean）
+     * - JSON 中数字被保存为 0/1（Number）
+     * - UI 层可能用不同的格式保存值
      */
     fun configGet(key: String, default: String, packageName: String?): String {
         loadConfig()
         val prefixed = prefixedKeyWith(key, packageName)
         val cache = configCache ?: return default
+        
         // 优先用带前缀的 key
         if (cache.has(prefixed)) {
-            return cache.optString(prefixed, default)
+            val value = cache.opt(prefixed)
+            return normalizeConfigValue(value, default)
         }
+        
         // 向后兼容：尝试不带前缀的旧 key
         if (prefixed != key && cache.has(key)) {
-            return cache.optString(key, default)
+            val value = cache.opt(key)
+            return normalizeConfigValue(value, default)
         }
+        
         return default
+    }
+
+    /**
+     * 规范化配置值，处理不同的类型和格式。
+     * 
+     * 转换规则：
+     * - String: 直接返回
+     * - Boolean: true → "true", false → "false"
+     * - Number: 0 → "false", 非0 → "true"
+     * - 其他对象: 调用 toString() 并规范化
+     * 
+     * 这解决了 UI 层保存配置时可能出现的类型不匹配问题。
+     */
+    private fun normalizeConfigValue(value: Any?, default: String): String {
+        if (value == null) return default
+        
+        return when (value) {
+            is String -> {
+                // 直接是字符串，返回原值
+                value
+            }
+            is Boolean -> {
+                // 布尔值转成字符串 "true" 或 "false"
+                if (value) "true" else "false"
+            }
+            is Number -> {
+                // 数字：0 → "false"，其他 → "true"
+                if (value.toInt() == 0) "false" else "true"
+            }
+            else -> {
+                // 其他类型，转字符串后规范化
+                val str = value.toString().trim().lowercase()
+                when {
+                    str in listOf("true", "yes", "1", "on") -> "true"
+                    str in listOf("false", "no", "0", "off", "") -> "false"
+                    else -> value.toString()
+                }
+            }
+        }
     }
 
     /**
