@@ -602,151 +602,173 @@ fun ModuleSettingsScreen(
                         } else {
                             Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
                                 packageSettings.forEach { (key, setting) ->
-                            val label = setting.optString("label", key)
-                            val type = setting.optString("type", "string")
-                            val default = setting.optString("default", "")
-                            val currentVal = settingValues[key] ?: default
+                                    val label = setting.optString("label", key)
+                                    val type = setting.optString("type", "string")
+                                    val default = setting.optString("default", "")
+                                    val currentVal = settingValues[key] ?: default
 
-                            when (type) {
-                                "password" -> {
-                                    OutlinedTextField(
-                                        value = currentVal,
-                                        onValueChange = { viewModel.setSettingValue(key, it) },
-                                        label = { Text(label) },
-                                        visualTransformation = PasswordVisualTransformation(),
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 4.dp)
-                                    )
-                                }
-                                "bool" -> {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 4.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(label, style = MaterialTheme.typography.bodyMedium)
-                                        Switch(
-                                            checked = currentVal == "true",
-                                            onCheckedChange = {
-                                                viewModel.setSettingValue(key, if (it) "true" else "false")
-                                            }
-                                        )
-                                    }
-                                }
-                                "select" -> {
-                                    // 解析选项：支持三种格式
-                                    // 1. JSON 数组 ["a","b","c"]
-                                    // 2. 管道字符串 "a|b|c"（纯值）
-                                    // 3. 值|标签对，逗号分隔 "a|显示A,b|显示B"
-                                    data class SelectOption(val value: String, val label: String)
-                                    val options = mutableListOf<SelectOption>()
-                                    val arr = setting.optJSONArray("options")
-                                    if (arr != null) {
-                                        for (i in 0 until arr.length()) {
-                                            val v = arr.getString(i)
-                                            options.add(SelectOption(v, v))
+                                    when (type) {
+                                        "password" -> {
+                                            OutlinedTextField(
+                                                value = currentVal,
+                                                onValueChange = { viewModel.setSettingValue(key, it) },
+                                                label = { Text(label) },
+                                                visualTransformation = PasswordVisualTransformation(),
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 4.dp)
+                                            )
                                         }
-                                    } else {
-                                        val optStr = setting.optString("options", "")
-                                        if (optStr.isNotBlank()) {
-                                            // 判断格式：含逗号且逗号分隔项里含 | → 值|标签 格式
-                                            if (optStr.contains(",") && optStr.contains("|")) {
-                                                optStr.split(",").forEach { item ->
-                                                    val trimmed = item.trim()
-                                                    if (trimmed.isNotBlank()) {
-                                                        val parts = trimmed.split("|", limit = 2)
-                                                        if (parts.size == 2) {
-                                                            options.add(SelectOption(parts[0].trim(), parts[1].trim()))
-                                                        } else {
-                                                            options.add(SelectOption(trimmed, trimmed))
-                                                        }
-                                                    }
-                                                }
-                                            } else {
-                                                // 纯管道分隔
-                                                optStr.split("|").forEach { v ->
-                                                    val trimmed = v.trim()
-                                                    if (trimmed.isNotBlank()) options.add(SelectOption(trimmed, trimmed))
-                                                }
-                                            }
-                                        }
-                                    }
-                                    val displayVal = options.find { it.value == currentVal }?.label
-                                        ?: options.find { it.value == default }?.label
-                                        ?: currentVal.ifEmpty { default }
-                                    var expanded by remember { mutableStateOf(false) }
-
-                                    ExposedDropdownMenuBox(
-                                        expanded = expanded,
-                                        onExpandedChange = { expanded = it },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 4.dp)
-                                    ) {
-                                        OutlinedTextField(
-                                            value = displayVal,
-                                            onValueChange = {},
-                                            readOnly = true,
-                                            label = { Text(label) },
-                                            trailingIcon = {
-                                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
-                                            },
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .menuAnchor()
-                                        )
-                                        ExposedDropdownMenu(
-                                            expanded = expanded,
-                                            onDismissRequest = { expanded = false }
-                                        ) {
-                                            options.forEach { opt ->
-                                                DropdownMenuItem(
-                                                    text = { Text(opt.label) },
-                                                    onClick = {
-                                                        viewModel.setSettingValue(key, opt.value)
-                                                        expanded = false
+                                        "bool" -> {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 4.dp),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(label, style = MaterialTheme.typography.bodyMedium)
+                                                Switch(
+                                                    checked = currentVal == "true",
+                                                    onCheckedChange = {
+                                                        viewModel.setSettingValue(key, if (it) "true" else "false")
                                                     }
                                                 )
                                             }
                                         }
-                                    }
-                                }
-                                "slider" -> {
-                                    val min = setting.optDouble("min", 0.0).toFloat()
-                                    val max = setting.optDouble("max", 100.0).toFloat()
-                                    val currentFloat = currentVal.toFloatOrNull() ?: default.toFloatOrNull() ?: min
+                                        "select" -> {
+                                            // 解析选项：支持三种格式
+                                            // 1. JSON 数组 ["a","b","c"]
+                                            // 2. 管道字符串 "a|b|c"（纯值）
+                                            // 3. 值|标签对，逗号分隔 "a|显示A,b|显示B"
+                                            data class SelectOption(val value: String, val label: String)
+                                            val options = mutableListOf<SelectOption>()
+                                            val arr = setting.optJSONArray("options")
+                                            if (arr != null) {
+                                                for (i in 0 until arr.length()) {
+                                                    val v = arr.getString(i)
+                                                    options.add(SelectOption(v, v))
+                                                }
+                                            } else {
+                                                val optStr = setting.optString("options", "")
+                                                if (optStr.isNotBlank()) {
+                                                    // 判断格式：含逗号且逗号分隔项里含 | → 值|标签 格式
+                                                    if (optStr.contains(",") && optStr.contains("|")) {
+                                                        optStr.split(",").forEach { item ->
+                                                            val trimmed = item.trim()
+                                                            if (trimmed.isNotBlank()) {
+                                                                val parts = trimmed.split("|", limit = 2)
+                                                                if (parts.size == 2) {
+                                                                    options.add(SelectOption(parts[0].trim(), parts[1].trim()))
+                                                                } else {
+                                                                    options.add(SelectOption(trimmed, trimmed))
+                                                                }
+                                                            }
+                                                        }
+                                                    } else {
+                                                        // 纯管道分隔
+                                                        optStr.split("|").forEach { v ->
+                                                            val trimmed = v.trim()
+                                                            if (trimmed.isNotBlank()) options.add(SelectOption(trimmed, trimmed))
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            val displayVal = options.find { it.value == currentVal }?.label
+                                                ?: options.find { it.value == default }?.label
+                                                ?: currentVal.ifEmpty { default }
+                                            var expanded by remember { mutableStateOf(false) }
 
-                                    Text(label, style = MaterialTheme.typography.bodySmall,
-                                        modifier = Modifier.padding(top = 8.dp))
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Slider(
-                                            value = currentFloat,
-                                            onValueChange = { viewModel.setSettingValue(key, it.toString()) },
-                                            valueRange = min..max,
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                        Text(
-                                            "%.1f".format(currentFloat),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            modifier = Modifier.padding(start = 8.dp)
-                                        )
+                                            ExposedDropdownMenuBox(
+                                                expanded = expanded,
+                                                onExpandedChange = { expanded = it },
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 4.dp)
+                                            ) {
+                                                OutlinedTextField(
+                                                    value = displayVal,
+                                                    onValueChange = {},
+                                                    readOnly = true,
+                                                    label = { Text(label) },
+                                                    trailingIcon = {
+                                                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                                                    },
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .menuAnchor()
+                                                )
+                                                ExposedDropdownMenu(
+                                                    expanded = expanded,
+                                                    onDismissRequest = { expanded = false }
+                                                ) {
+                                                    options.forEach { opt ->
+                                                        DropdownMenuItem(
+                                                            text = { Text(opt.label) },
+                                                            onClick = {
+                                                                viewModel.setSettingValue(key, opt.value)
+                                                                expanded = false
+                                                            }
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        "slider" -> {
+                                            val min = setting.optDouble("min", 0.0).toFloat()
+                                            val max = setting.optDouble("max", 100.0).toFloat()
+                                            val currentFloat = currentVal.toFloatOrNull() ?: default.toFloatOrNull() ?: min
+
+                                            Text(label, style = MaterialTheme.typography.bodySmall,
+                                                modifier = Modifier.padding(top = 8.dp))
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Slider(
+                                                    value = currentFloat,
+                                                    onValueChange = { viewModel.setSettingValue(key, it.toString()) },
+                                                    valueRange = min..max,
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                                Text(
+                                                    "%.1f".format(currentFloat),
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    modifier = Modifier.padding(start = 8.dp)
+                                                )
+                                            }
+                                        }
+                                        else -> {
+                                            // Default: string
+                                            OutlinedTextField(
+                                                value = currentVal,
+                                                onValueChange = { viewModel.setSettingValue(key, it) },
+                                                label = { Text(label) },
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 4.dp)
+                                            )
+                                        }
                                     }
                                 }
-                                else -> {
-                                    // Default: string
-                                    OutlinedTextField(
-                                        value = currentVal,
-                                        onValueChange = { viewModel.setSettingValue(key, it) },
-                                        label = { Text(label) },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 4.dp)
+                            }
+                        }
+                    } else {
+                        // 日志 tab
+                        Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+                            if (moduleLogs.isEmpty()) {
+                                Text("暂无该模块的日志", style = MaterialTheme.typography.bodyMedium)
+                            } else {
+                                Text("共 ${moduleLogs.size} 条日志",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(vertical = 4.dp))
+                                moduleLogs.forEach { logLine ->
+                                    Text(
+                                        logLine,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontFamily = FontFamily.Monospace,
+                                        modifier = Modifier.padding(vertical = 2.dp)
                                     )
                                 }
                             }

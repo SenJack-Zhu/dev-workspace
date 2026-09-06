@@ -243,8 +243,7 @@ class ModuleImporter @Inject constructor(
 
         // Merge package config into shared config
         if (packageConfig != null) {
-            mergeConfig(packageConfig)
-            hookRegistry.log("[Importer] Merged config from $packageName")
+            mergeConfig(packageName, packageConfig)
         }
 
         hookRegistry.log("[Importer] Imported '$packageName' v$version: ${jsFiles.size} JS files, ${extractedFiles.size} total files")
@@ -264,7 +263,7 @@ class ModuleImporter @Inject constructor(
      * Merge a package's config values into the shared config.json.
      * Existing values are overwritten by the package's values.
      */
-    private fun mergeConfig(packageConfig: JSONObject) {
+    private fun mergeConfig(packageName: String, packageConfig: JSONObject) {
         val keys = packageConfig.keys()
         while (keys.hasNext()) {
             val key = keys.next()
