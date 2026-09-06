@@ -434,6 +434,18 @@ class ModuleSettingsViewModel @Inject constructor(
         _moduleLogs.value = filtered
     }
 
+    fun copyModuleLogs() {
+        val logs = _moduleLogs.value
+        if (logs.isEmpty()) {
+            _message.value = "日志为空"
+            return
+        }
+        val text = logs.joinToString("\n")
+        val clipboard = app.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("MoRead Module Logs", text))
+        _message.value = "已复制 ${logs.size} 条日志到剪贴板"
+    }
+
     fun closePackageSettings() {
         _viewingSettingsPackage.value = null
         _packageSettings.value = emptyList()

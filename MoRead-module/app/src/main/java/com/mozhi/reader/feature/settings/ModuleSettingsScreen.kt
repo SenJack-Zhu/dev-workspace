@@ -755,21 +755,47 @@ fun ModuleSettingsScreen(
                         }
                     } else {
                         // 日志 tab
-                        Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
-                            if (moduleLogs.isEmpty()) {
-                                Text("暂无该模块的日志", style = MaterialTheme.typography.bodyMedium)
-                            } else {
-                                Text("共 ${moduleLogs.size} 条日志",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(vertical = 4.dp))
-                                moduleLogs.forEach { logLine ->
-                                    Text(
-                                        logLine,
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                TextButton(
+                                    onClick = { viewModel.copyModuleLogs() },
+                                    enabled = moduleLogs.isNotEmpty()
+                                ) {
+                                    Icon(Icons.Outlined.ContentCopy, contentDescription = null,
+                                        modifier = Modifier.size(18.dp))
+                                    Text(" 复制", style = MaterialTheme.typography.labelSmall)
+                                }
+                                TextButton(
+                                    onClick = {
+                                        viewModel.refreshModuleLogs()
+                                    }
+                                ) {
+                                    Icon(Icons.Outlined.Refresh, contentDescription = null,
+                                        modifier = Modifier.size(18.dp))
+                                    Text(" 刷新", style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                            Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+                                if (moduleLogs.isEmpty()) {
+                                    Text("暂无该模块的日志", style = MaterialTheme.typography.bodyMedium)
+                                } else {
+                                    Text("共 ${moduleLogs.size} 条日志",
                                         style = MaterialTheme.typography.bodySmall,
-                                        fontFamily = FontFamily.Monospace,
-                                        modifier = Modifier.padding(vertical = 2.dp)
-                                    )
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(vertical = 4.dp))
+                                    moduleLogs.forEach { logLine ->
+                                        Text(
+                                            logLine,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontFamily = FontFamily.Monospace,
+                                            modifier = Modifier.padding(vertical = 2.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
