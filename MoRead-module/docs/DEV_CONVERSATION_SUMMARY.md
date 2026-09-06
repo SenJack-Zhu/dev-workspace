@@ -112,6 +112,13 @@ dev-workspace/
 1. ModuleSettingsScreen.kt 设置弹窗括号不匹配 + 日志 tab 内容缺失
 2. ModuleImporter.kt `mergeConfig()` 函数缺少 `packageName` 参数
 
+**配置隔离（commit 92bc74a，本地未推送）：**
+1. ModuleApi: 增加 `currentPackageName` ThreadLocal，config/storage 自动加 `包名:` 前缀
+2. ModuleLoader: 加载模块时设置当前包名
+3. ModuleImporter: 配置读写显式传包名
+4. ModuleSettingsViewModel: 设置 UI 传包名
+5. 向后兼容：读取时带前缀找不到降级找旧 key
+
 ---
 
 ## 🐛 常见错误速查（完整列表见 ERRORS.md）
@@ -157,6 +164,54 @@ dev-workspace/
 - **GitHub 仓库**：https://github.com/SenJack-Zhu/dev-workspace.git
 - **GitHub PAT**：`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`
 - **当前分支**：main
+
+---
+
+## 🗺️ 配置系统演进规划（已确认，待实施）
+
+### 当前状态（前缀方案，已实现未推送）
+config.json 和 storage.json 是扁平 key-value，用 `包名:key` 前缀做隔离。
+
+### 目标架构（分两步走）
+
+**第一阶段：JSON 块结构（内部重构，对外 API 不变）**
+
+`config.json` 从扁平改为嵌套：
+```json
+{
+  "text-proofread": { "enableDisplay": "true", "enableProofread": "true" },
+  "smart-text": { "aiMode": "off", "enableDialogueSegment": "true" },
+  "_global": { "modulesEnabled": true, "packageEnabled": {} }
+}
+```
+- JS API 不变（`MoRead.configGet("key")` 自动进当前模块的块）
+- 全局配置放 `_global` 块
+- 向后兼容：迁移时自动把扁平 key 归到对应模块的块里
+
+**第二阶段：模块目录独立配置文件**
+
+```
+modules/
+├── _global/
+│   └── config.json         ← 全局配置（模块总开关等）
+├── text-proofread/
+│   ├── manifest.json
+│   ├── proofread.js
+│   └── config.json         ← 模块自己的配置
+└── smart-text/
+    ├── manifest.json
+    ├── smart-text.js
+    └── config.json         ← 模块自己的配置
+```
+- 每个模块目录下有自己的 `config.json` 和 `storage.json`
+- 全局配置单独目录或在根目录
+- 删除模块 = 删目录，配置自动清理
+- 导出 .mrm 可选择是否连带配置
+
+### 设计原则
+- 全局配置（所有模块共用的、模块系统本身的）→ 根目录/全局目录
+- 模块自身设置 → 模块自己目录下
+- 对外 API 尽量不变，内部实现逐步演进
 
 ---
 
