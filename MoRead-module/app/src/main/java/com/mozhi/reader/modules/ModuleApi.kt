@@ -323,9 +323,15 @@ class ModuleApi @Inject constructor(
      * 向后兼容：如果带前缀的 key 找不到，会尝试查找不带前缀的旧 key。
      * @param key 配置项 key（不带前缀）
      * @param default 默认值
-     * @param packageName 包名，不传则用当前线程的 currentPackageName
      */
-    fun configGet(key: String, default: String, packageName: String? = null): String {
+    fun configGet(key: String, default: String): String {
+        return configGet(key, default, null)
+    }
+
+    /**
+     * 读取配置值（带显式包名，供 Kotlin 侧调用）。
+     */
+    fun configGet(key: String, default: String, packageName: String?): String {
         loadConfig()
         val prefixed = prefixedKeyWith(key, packageName)
         val cache = configCache ?: return default
@@ -344,9 +350,15 @@ class ModuleApi @Inject constructor(
      * 写入配置值。key 会自动加上包名前缀实现隔离。
      * @param key 配置项 key（不带前缀）
      * @param value 值
-     * @param packageName 包名，不传则用当前线程的 currentPackageName
      */
-    fun configSet(key: String, value: String, packageName: String? = null) {
+    fun configSet(key: String, value: String) {
+        configSet(key, value, null)
+    }
+
+    /**
+     * 写入配置值（带显式包名，供 Kotlin 侧调用）。
+     */
+    fun configSet(key: String, value: String, packageName: String?) {
         loadConfig()
         val prefixed = prefixedKeyWith(key, packageName)
         configCache?.put(prefixed, value)
@@ -369,7 +381,11 @@ class ModuleApi @Inject constructor(
 
     // ── Storage (persistent per-module key-value) ──────────────────
 
-    fun storageGet(key: String, default: String, packageName: String? = null): String {
+    fun storageGet(key: String, default: String): String {
+        return storageGet(key, default, null)
+    }
+
+    fun storageGet(key: String, default: String, packageName: String?): String {
         loadStorage()
         val prefixed = prefixedKeyWith(key, packageName)
         val cache = storageCache ?: return default
@@ -383,14 +399,22 @@ class ModuleApi @Inject constructor(
         return default
     }
 
-    fun storageSet(key: String, value: String, packageName: String? = null) {
+    fun storageSet(key: String, value: String) {
+        storageSet(key, value, null)
+    }
+
+    fun storageSet(key: String, value: String, packageName: String?) {
         loadStorage()
         val prefixed = prefixedKeyWith(key, packageName)
         storageCache?.put(prefixed, value)
         saveStorage()
     }
 
-    fun storageRemove(key: String, packageName: String? = null) {
+    fun storageRemove(key: String) {
+        storageRemove(key, null)
+    }
+
+    fun storageRemove(key: String, packageName: String?) {
         loadStorage()
         val prefixed = prefixedKeyWith(key, packageName)
         storageCache?.remove(prefixed)
