@@ -788,7 +788,7 @@ fun ModuleSettingsScreen(
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.padding(vertical = 4.dp))
-                                    moduleLogs.forEach { logLine ->
+                                    moduleLogs.reversed().forEach { logLine ->
                                         Text(
                                             logLine,
                                             style = MaterialTheme.typography.bodySmall,
