@@ -1,5 +1,5 @@
 // ============================================================
-// TTS 增强模块 (TTS Enhance Module) v1.1.0
+// TTS 增强模块 (TTS Enhance Module) v1.2.0
 //
 // 注册三个 hook:
 //   - tts.synthesize:    自定义 TTS 语音合成端点（OpenAI 兼容 / 万能转发器）
@@ -47,6 +47,40 @@ function renderTemplate(template, vars) {
         }
     }
     return result;
+}
+
+/**
+ * 推断音频 MIME 类型。
+ * 优先用服务端声明的 Content-Type；缺失或不规范时按 base64 魔数判断，
+ * 最后才回落到请求时指定的格式。
+ * @param {string} contentType - 服务端 Content-Type（可能为 null）
+ * @param {string} b64 - base64 音频
+ * @param {string} requestedFormat - 请求时指定的格式（如 "mp3"）
+ * @returns {string} MIME 类型
+ */
+function guessAudioMediaType(contentType, b64, requestedFormat) {
+    if (contentType) {
+        var ct = String(contentType).toLowerCase().split(";")[0].trim();
+        if (ct.indexOf("audio/") === 0 || ct.indexOf("video/") === 0) return ct;
+        if (ct === "application/ogg") return "audio/ogg";
+    }
+    // 优先用宿主提供的魔数识别（避免在 JS 里重复实现）
+    if (typeof MoRead.guessAudioType === "function") {
+        var guessed = MoRead.guessAudioType(b64);
+        if (guessed && guessed !== "audio/mpeg") return guessed;
+    }
+    // RIFF/WAVE
+    if (b64 && b64.indexOf("UklGR") === 0) return "audio/wav";
+    if (b64 && b64.indexOf("T2dnUw") === 0) return "audio/ogg";
+    if (b64 && b64.indexOf("ZkxhQ") === 0) return "audio/flac";
+    if (requestedFormat) {
+        var f = String(requestedFormat).toLowerCase().replace("audio/", "");
+        if (f === "wav") return "audio/wav";
+        if (f === "ogg") return "audio/ogg";
+        if (f === "flac") return "audio/flac";
+        if (f === "aac") return "audio/aac";
+    }
+    return "audio/mpeg";
 }
 
 /**
@@ -136,8 +170,16 @@ function initCustomTTS() {
         // URL 模板为空的话，用 endpoint 作为基础地址拼一下
         if (!urlTemplate) {
             if (method === "GET") {
-                urlTemplate = endpoint.replace(/\/+$/, "") +
-                    "?text={{text}}&voice={{voice}}&speed={{speed}}&volume={{volume}}&pitch={{pitch}}";
+                var base = endpoint.replace(/\/+$/, "");
+                // endpoint 若已带路径（如 http://host:8774/forward）则直接追加查询串；
+                // 否则默认按 OpenAI 兼容的 /audio/speech 约定拼接。
+                var join = base.indexOf("?", 8) >= 0 ? "&" : "?";
+                var looksLikeFullPath = /\/[a-zA-Z]/.test(base.substring(base.indexOf("://") + 3));
+                if (looksLikeFullPath) {
+                    urlTemplate = base + join + "text={{text}}&voice={{voice}}";
+                } else {
+                    urlTemplate = base + "/forward?text={{text}}&voice={{voice}}";
+                }
             } else {
                 urlTemplate = endpoint;
             }
@@ -176,6 +218,19 @@ function initCustomTTS() {
             // 渲染 URL
             var url = renderTemplate(urlTemplate, vars);
 
+            // ── 请求行长度守卫 ──
+            // 多数自建 TTS 服务只接受 URL 查询串传参，且请求行硬上限约 8 KB。
+            // 中文经 encodeURIComponent 后每字 9 字节，超限时服务端会直接断开连接
+            // 且不给任何响应，表现为「朗读莫名停止」。这里提前拦截并给出可操作提示。
+            var SAFE_URL_BYTES = getConfigInt("maxUrlBytes", 7000);
+            var urlBytes = url.length;
+            if (urlBytes > SAFE_URL_BYTES) {
+                MoRead.log("[CustomTTS] URL 超长，已放弃本次合成: " + urlBytes +
+                    " 字节 (上限 " + SAFE_URL_BYTES + ")，文本 " + text.length + " 字");
+                MoRead.log("[CustomTTS] 建议：把「单句最大字符数」调小到 400 以下，或改用非 GET 传参的服务");
+                return null;
+            }
+
             // 渲染请求头
             var headers = {};
             try {
@@ -206,7 +261,6 @@ function initCustomTTS() {
                 if (method === "GET") {
                     resp = MoRead.httpGet(url, headers);
                 } else {
-                    // POST / PUT 等
                     var body = bodyTemplate ? renderTemplate(bodyTemplate, vars) : "";
                     resp = MoRead.httpPost(url, body, headers["Content-Type"] || "application/json", headers);
                 }
@@ -220,6 +274,16 @@ function initCustomTTS() {
                     return null;
                 }
 
+                // ── 二进制优先 ──
+                // 音频必须以 base64 原样取回；任何经过文本解码的路径都会毁掉字节。
+                if (resp.base64 && resp.base64.length > 0) {
+                    var mt = guessAudioMediaType(resp.contentType, resp.base64, p.responseFormat);
+                    MoRead.log("[CustomTTS] 合成成功（二进制）" +
+                        MoRead.bytesLength(resp.base64) + " 字节, " + mt);
+                    return JSON.stringify({ audio: resp.base64, mediaType: mt });
+                }
+
+                // 文本响应：可能是 JSON 里包着 base64
                 var result = extractAudio(resp.body, responseExtract, p.responseFormat || "mp3");
                 if (result) {
                     MoRead.log("[CustomTTS] 合成成功, 音频长度: " + result.audio.length);
@@ -581,7 +645,7 @@ if (isEnabled("enableCustomTTS")) activeHooks.push("tts.synthesize");
 if (isEnabled("enableCustomVoices")) activeHooks.push("tts.voices");
 if (isEnabled("enableCustomSegmenter")) activeHooks.push("listen.sentence");
 
-MoRead.log("TTS 增强模块 v1.1.0 加载完成");
+MoRead.log("TTS 增强模块 v1.2.0 加载完成");
 if (activeHooks.length > 0) {
     MoRead.log("已激活 hook: " + activeHooks.join(", "));
 } else {

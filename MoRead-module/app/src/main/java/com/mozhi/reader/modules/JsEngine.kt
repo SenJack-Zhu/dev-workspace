@@ -57,13 +57,42 @@ class JsEngine @Inject constructor(
                     httpGet: function(url, headers) {
                         var h = headers || {};
                         var r = b.httpGet(url, h);
-                        return r ? { status: r.status, body: r.body, ok: r.ok, json: r.json } : null;
+                        return r ? { status: r.status, body: r.body, ok: r.ok, json: r.json,
+                                     base64: r.base64, contentType: r.contentType } : null;
                     },
                     httpPost: function(url, body, contentType, headers) {
                         var ct = contentType || 'application/json';
                         var h = headers || {};
                         var r = b.httpPost(url, body || '', ct, h);
-                        return r ? { status: r.status, body: r.body, ok: r.ok, json: r.json } : null;
+                        return r ? { status: r.status, body: r.body, ok: r.ok, json: r.json,
+                                     base64: r.base64, contentType: r.contentType } : null;
+                    },
+                    httpGetBase64: function(url, headers) {
+                        var h = headers || {};
+                        return b.httpGetBase64(url, h);
+                    },
+                    httpPostBase64: function(url, body, contentType, headers) {
+                        var ct = contentType || 'application/json';
+                        var h = headers || {};
+                        return b.httpPostBase64(url, body || '', ct, h);
+                    },
+                    bytesLength: function(b64) {
+                        if (!b64) return 0;
+                        var s = String(b64);
+                        var pad = 0;
+                        if (s.charAt(s.length - 1) === '=') pad++;
+                        if (s.charAt(s.length - 2) === '=') pad++;
+                        return Math.floor(s.length * 3 / 4) - pad;
+                    },
+                    guessAudioType: function(b64) {
+                        if (!b64 || b64.length < 8) return 'audio/mpeg';
+                        var head = b64.substring(0, 8);
+                        if (head.indexOf('UklGR') === 0) return 'audio/wav';
+                        if (head.indexOf('T2dnUw') === 0) return 'audio/ogg';
+                        if (head.indexOf('ZkxhQ') === 0) return 'audio/flac';
+                        if (head.indexOf('SUQz') === 0) return 'audio/mpeg';
+                        if (head.indexOf('//u') === 0 || head.indexOf('//v') === 0) return 'audio/mpeg';
+                        return 'audio/mpeg';
                     },
                     configGet: function(key, def) { return b.configGet(key, def || ''); },
                     configSet: function(key, val) { return b.configSet(key, val); },

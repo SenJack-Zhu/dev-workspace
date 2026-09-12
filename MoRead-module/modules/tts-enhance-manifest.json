@@ -1,7 +1,7 @@
 {
   "name": "tts-enhance",
   "displayName": "TTS 增强",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "author": "MoRead",
   "description": "TTS 增强模块：自定义 TTS 端点（OpenAI 兼容 / 万能转发器）、自定义音色列表（静态 / 动态拉取）、自定义句子断句规则，全面掌控听书体验。",
   "settings": [
@@ -12,9 +12,10 @@
     {"key": "ttsModel", "label": "模型名称（可选，转发器自动选择则留空）", "type": "string", "default": ""},
     {"key": "ttsDefaultVoice", "label": "默认音色 ID（可选，转发器自动选择则留空）", "type": "string", "default": ""},
     {"key": "ttsFormat", "label": "音频格式（可选，默认 mp3，留空不发送）", "type": "string", "default": "mp3"},
+    {"key": "maxUrlBytes", "label": "[转发器] 请求 URL 字节上限（超出则跳过并提示，建议 7000）", "type": "string", "default": "7000"},
 
-    {"key": "universalMethod", "label": "[万能转发器] 请求方法", "type": "select", "default": "GET", "options": "GET|POST"},
-    {"key": "universalUrlTemplate", "label": "[万能转发器] URL 模板（用 {{text}} {{voice}} {{speed}} 等变量）", "type": "string", "default": ""},
+    {"key": "universalMethod", "label": "[万能转发器] 请求方法（多数自建服务仅认 URL 查询串，方法被忽略）", "type": "select", "default": "GET", "options": "GET|POST"},
+    {"key": "universalUrlTemplate", "label": "[万能转发器] URL 模板（用 {{text}} {{voice}} 等变量）", "type": "string", "default": ""},
     {"key": "universalHeaders", "label": "[万能转发器] 请求头（JSON 格式，支持模板变量）", "type": "string", "default": "{}"},
     {"key": "universalBodyTemplate", "label": "[万能转发器] 请求体模板（POST 时用，支持 {{rawText}} 等）", "type": "string", "default": ""},
     {"key": "universalResponseExtract", "label": "[万能转发器] 响应音频字段路径（如 data.audio，留空自动识别）", "type": "string", "default": ""},
@@ -23,13 +24,13 @@
     {"key": "voicesSource", "label": "音色列表来源", "type": "select", "default": "static", "options": "static|dynamic"},
     {"key": "customVoices", "label": "[静态] 自定义音色（JSON 数组）", "type": "string", "default": "[{\"voiceId\":\"alloy\",\"displayName\":\"合金男声\",\"gender\":\"MALE\",\"tags\":\"通用\"}]"},
     {"key": "dynamicVoicesUrl", "label": "[动态] 音色列表接口 URL", "type": "string", "default": ""},
-    {"key": "dynamicVoicesExtract", "label": "[动态] 列表提取路径（如 data.list，留空取顶层）", "type": "string", "default": ""},
+    {"key": "dynamicVoicesExtract", "label": "[动态] 列表提取路径（如 data.catalog，留空取顶层）", "type": "string", "default": ""},
     {"key": "dynamicVoiceIdField", "label": "[动态] 音色 ID 字段名", "type": "string", "default": "voiceId"},
     {"key": "dynamicVoiceNameField", "label": "[动态] 音色名称字段名", "type": "string", "default": "displayName"},
     {"key": "dynamicVoicesHeaders", "label": "[动态] 请求头（JSON 格式）", "type": "string", "default": "{}"},
 
     {"key": "enableCustomSegmenter", "label": "启用自定义句子断句", "type": "bool", "default": "false"},
-    {"key": "segmentMaxChars", "label": "单句最大字符数", "type": "string", "default": "96"},
+    {"key": "segmentMaxChars", "label": "单句最大字符数（受服务端 URL 上限约束，建议不超过 600）", "type": "string", "default": "400"},
     {"key": "segmentTerminators", "label": "终止标点（字符串）", "type": "string", "default": "。！？!?…；;"},
     {"key": "segmentSoftBreaks", "label": "次级停顿标点（超长句在此切分）", "type": "string", "default": "，,、：: 　"}
   ]

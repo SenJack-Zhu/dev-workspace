@@ -30,6 +30,9 @@ class ModuleApi @Inject constructor(
     private val aiClientFactory: AiClientFactory
 ) {
     companion object {
+        /** 单次 HTTP 响应体字节上限，防止异常大响应撑爆堆内存。 */
+        const val MAX_RESPONSE_BYTES = 32 * 1024 * 1024
+
         val currentModuleName = ThreadLocal<String>()
         val currentPackageName = ThreadLocal<String>()
         @Volatile var reloadRequested = false
@@ -140,47 +143,183 @@ class ModuleApi @Inject constructor(
     // ── HTTP client (synchronous) ──────────────────────────────────
 
     /**
-     * JS: MoRead.httpGet(url, headers) → { status, body, ok, json? }
+     * JS: MoRead.httpGet(url, headers) → { status, body, ok, json?, base64?, contentType? }
+     *
+     * 文本响应照旧放在 [HttpResult.body]；二进制响应（音频/图片/八位流）改放在
+     * [HttpResult.base64]，避免 UTF-8 解码破坏字节。JS 侧用 MoRead.httpGetBase64 取。
      */
     fun httpGet(url: String, headers: java.util.Map<String, String>?): HttpResult? {
         return doHttp("GET", url, null, "application/json", headers)
     }
 
     /**
-     * JS: MoRead.httpPost(url, body, contentType, headers) → { status, body, ok, json? }
+     * JS: MoRead.httpPost(url, body, contentType, headers) → { status, body, ok, json?, base64?, contentType? }
      */
     fun httpPost(url: String, body: String, contentType: String, headers: java.util.Map<String, String>?): HttpResult? {
         return doHttp("POST", url, body, contentType, headers)
     }
 
-    data class HttpResult(val status: Int, val body: String, val ok: Boolean, val json: String?)
+    /**
+     * JS: MoRead.httpGetBase64(url, headers) → base64 字符串或 null
+     *
+     * 专供 TTS/图片等二进制响应使用。与 [httpGet] 的区别是会强制按字节读取，
+     * 无论服务端 Content-Type 是否规范。
+     */
+    fun httpGetBase64(url: String, headers: java.util.Map<String, String>?): String? {
+        return doHttpBinary("GET", url, null, "application/json", headers)
+    }
+
+    /**
+     * JS: MoRead.httpPostBase64(url, body, contentType, headers) → base64 字符串或 null
+     */
+    fun httpPostBase64(
+        url: String, body: String, contentType: String, headers: java.util.Map<String, String>?
+    ): String? {
+        return doHttpBinary("POST", url, body, contentType, headers)
+    }
+
+    data class HttpResult(
+        val status: Int,
+        val body: String,
+        val ok: Boolean,
+        val json: String?,
+        /** 二进制响应体的 base64；文本响应时为 null。 */
+        val base64: String? = null,
+        /** 服务端声明的 Content-Type，便于 JS 推断音频格式。 */
+        val contentType: String? = null
+    )
+
+    /**
+     * 判断响应是否应按二进制处理。
+     *
+     * 不只看 Content-Type 的 audio/image 前缀：TTS 服务经常把音频标成
+     * application/octet-stream，少数还会标成 text/plain 甚至不带 Content-Type。
+     * 因此这里同时检查响应体魔数，避免漏判导致音频被文本解码毁掉。
+     */
+    private fun looksBinary(contentType: String?, head: ByteArray, length: Int): Boolean {
+        val ct = contentType?.lowercase()?.substringBefore(';')?.trim().orEmpty()
+        if (ct.startsWith("audio/") || ct.startsWith("image/") ||
+            ct.startsWith("video/") || ct == "application/octet-stream" ||
+            ct == "application/zip" || ct == "application/ogg"
+        ) {
+            return true
+        }
+        // Content-Type 不可信时改用魔数判定
+        if (length < 4) return false
+        fun asciiAt(offset: Int, text: String): Boolean {
+            if (offset + text.length > length) return false
+            for (i in text.indices) {
+                if (head[offset + i] != text[i].code.toByte()) return false
+            }
+            return true
+        }
+        return when {
+            asciiAt(0, "RIFF") -> true            // WAV / AVI
+            asciiAt(0, "OggS") -> true            // Ogg
+            asciiAt(0, "fLaC") -> true            // FLAC
+            asciiAt(0, "ID3") -> true             // 带 ID3 标签的 MP3
+            asciiAt(1, "PNG") && head[0] == 0x89.toByte() -> true
+            head[0] == 0xFF.toByte() && head[1] == 0xD8.toByte() -> true   // JPEG
+            // MP3 裸帧同步：0xFF 后接 0xE0 掩码
+            head[0] == 0xFF.toByte() && (head[1].toInt() and 0xE0) == 0xE0 -> true
+            else -> false
+        }
+    }
+
+    /** 读取响应流，超过 [MAX_RESPONSE_BYTES] 时截断并记录日志。 */
+    private fun readStreamLimited(stream: java.io.InputStream): ByteArray {
+        val buffer = java.io.ByteArrayOutputStream()
+        val chunk = ByteArray(8192)
+        var total = 0
+        var truncated = false
+        while (total < MAX_RESPONSE_BYTES) {
+            val capacity = MAX_RESPONSE_BYTES - total
+            val read = stream.read(chunk, 0, if (capacity < chunk.size) capacity else chunk.size)
+            if (read <= 0) break
+            buffer.write(chunk, 0, read)
+            total += read
+        }
+        // 达到上限后判断是否还有剩余数据
+        if (total >= MAX_RESPONSE_BYTES && stream.read() >= 0) truncated = true
+        if (truncated) {
+            hookRegistry.log(
+                "[HTTP] Response exceeds ${MAX_RESPONSE_BYTES / 1024 / 1024} MB, truncated"
+            )
+        }
+        return buffer.toByteArray()
+    }
+
+    private fun openConnection(
+        method: String, url: String, body: String?, contentType: String,
+        headers: java.util.Map<String, String>?
+    ): java.net.HttpURLConnection {
+        return (java.net.URL(url).openConnection() as java.net.HttpURLConnection).apply {
+            requestMethod = method
+            connectTimeout = 30000
+            readTimeout = 60000
+            if (method == "POST") {
+                setRequestProperty("Content-Type", contentType)
+                doOutput = true
+                // 注意：部分自建 TTS 服务只要收到请求体就会直接断开连接，
+                // 因此仅在确实有 body 时才写入。
+                if (!body.isNullOrEmpty()) {
+                    outputStream.use { it.write(body.toByteArray()) }
+                }
+            }
+            headers?.forEach { k, v -> setRequestProperty(k, v) }
+        }
+    }
 
     private fun doHttp(
         method: String, url: String, body: String?, contentType: String,
         headers: java.util.Map<String, String>?
     ): HttpResult? {
         return try {
-            val conn = (java.net.URL(url).openConnection() as java.net.HttpURLConnection).apply {
-                requestMethod = method
-                connectTimeout = 30000
-                readTimeout = 60000
-                if (method == "POST") {
-                    setRequestProperty("Content-Type", contentType)
-                    doOutput = true
-                    if (body != null) {
-                        outputStream.use { it.write(body.toByteArray()) }
-                    }
-                }
-                headers?.forEach { k, v -> setRequestProperty(k, v) }
-            }
+            val conn = openConnection(method, url, body, contentType, headers)
             val code = conn.responseCode
-            val respBody = if (code in 200..299) {
-                conn.inputStream.bufferedReader().use { it.readText() }
-            } else {
-                conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+            val ct = conn.getHeaderField("Content-Type")
+            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+            if (stream == null) {
+                return HttpResult(code, "", code in 200..299, null, null, ct)
             }
-            val jsonStr = try { JSONObject(respBody).toString() } catch (_: Exception) { null }
-            HttpResult(code, respBody, code in 200..299, jsonStr)
+            val bytes = stream.use { readStreamLimited(it) }
+
+            if (looksBinary(ct, bytes, bytes.size)) {
+                // 二进制：不做文本解码，交给 base64
+                val b64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                hookRegistry.log("[HTTP] $method 二进制响应 ${bytes.size} 字节 (${ct ?: "无 Content-Type"})")
+                HttpResult(code, "", code in 200..299, null, b64, ct)
+            } else {
+                val respBody = String(bytes, Charsets.UTF_8)
+                val jsonStr = try { JSONObject(respBody).toString() } catch (_: Exception) { null }
+                HttpResult(code, respBody, code in 200..299, jsonStr, null, ct)
+            }
+        } catch (e: Exception) {
+            hookRegistry.log("[HTTP] $method $url error: ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * 强制按二进制读取（调用方明确知道要的是音频/图片）。
+     */
+    private fun doHttpBinary(
+        method: String, url: String, body: String?, contentType: String,
+        headers: java.util.Map<String, String>?
+    ): String? {
+        return try {
+            val conn = openConnection(method, url, body, contentType, headers)
+            val code = conn.responseCode
+            if (code !in 200..299) {
+                hookRegistry.log("[HTTP] $method $url 失败: HTTP $code")
+                return null
+            }
+            val bytes = (conn.inputStream ?: return null).use { readStreamLimited(it) }
+            if (bytes.isEmpty()) {
+                hookRegistry.log("[HTTP] $method $url 返回空响应体")
+                return null
+            }
+            android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
         } catch (e: Exception) {
             hookRegistry.log("[HTTP] $method $url error: ${e.message}")
             null
