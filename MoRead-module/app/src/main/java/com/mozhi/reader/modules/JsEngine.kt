@@ -44,7 +44,23 @@ class JsEngine @Inject constructor(
         // Define the MoRead API as a JavaScript wrapper around __bridge.
         // This gives us clean, documented JS signatures without complex
         // Rhino Function bridging.
+        // 把宿主返回的 HTTP 结果拆包成纯 JS 值。
+        // Rhino 会把 java.lang.String 包装成对象，若不拆包，
+        // JS 侧 `typeof body === 'string'`、`b64.length`、字符串比较
+        // 全部会失效（尤其影响音频 base64 与二进制嗅探逻辑）。
         val apiDef = """
+            function __unwrapHttp(r) {
+                if (!r) return null;
+                return {
+                    status: r.status,
+                    ok: r.ok,
+                    body: String(r.body === null || r.body === undefined ? '' : r.body),
+                    json: (r.json === null || r.json === undefined) ? null : String(r.json),
+                    base64: (r.base64 === null || r.base64 === undefined) ? null : String(r.base64),
+                    contentType: (r.contentType === null || r.contentType === undefined) ? null : String(r.contentType)
+                };
+            }
+
             var MoRead = (function() {
                 var b = __bridge;
                 return {
@@ -56,25 +72,23 @@ class JsEngine @Inject constructor(
                     },
                     httpGet: function(url, headers) {
                         var h = headers || {};
-                        var r = b.httpGet(url, h);
-                        return r ? { status: r.status, body: r.body, ok: r.ok, json: r.json,
-                                     base64: r.base64, contentType: r.contentType } : null;
+                        return __unwrapHttp(b.httpGet(url, h));
                     },
                     httpPost: function(url, body, contentType, headers) {
                         var ct = contentType || 'application/json';
                         var h = headers || {};
-                        var r = b.httpPost(url, body || '', ct, h);
-                        return r ? { status: r.status, body: r.body, ok: r.ok, json: r.json,
-                                     base64: r.base64, contentType: r.contentType } : null;
+                        return __unwrapHttp(b.httpPost(url, body || '', ct, h));
                     },
                     httpGetBase64: function(url, headers) {
                         var h = headers || {};
-                        return b.httpGetBase64(url, h);
+                        var v = b.httpGetBase64(url, h);
+                        return (v === null || v === undefined) ? null : String(v);
                     },
                     httpPostBase64: function(url, body, contentType, headers) {
                         var ct = contentType || 'application/json';
                         var h = headers || {};
-                        return b.httpPostBase64(url, body || '', ct, h);
+                        var v = b.httpPostBase64(url, body || '', ct, h);
+                        return (v === null || v === undefined) ? null : String(v);
                     },
                     bytesLength: function(b64) {
                         if (!b64) return 0;
@@ -94,22 +108,27 @@ class JsEngine @Inject constructor(
                         if (head.indexOf('//u') === 0 || head.indexOf('//v') === 0) return 'audio/mpeg';
                         return 'audio/mpeg';
                     },
-                    configGet: function(key, def) { return b.configGet(key, def || ''); },
-                    configSet: function(key, val) { return b.configSet(key, val); },
+                    // ── 字符串返回值统一用 String() 拆包 ──────────────
+                    // Rhino 会把 Kotlin/Java 的 java.lang.String 包装成宿主对象，
+                    // 导致 `configGet(k) === "true"` 这类严格比较恒为 false
+                    // （typeof 得到 "object" 而非 "string"）。
+                    // 在这里统一转成 JS 原生字符串，避免每个模块各自踩坑。
+                    configGet: function(key, def) { return String(b.configGet(key, def === undefined || def === null ? '' : String(def))); },
+                    configSet: function(key, val) { return b.configSet(key, val === undefined || val === null ? '' : String(val)); },
                     configSave: function() { return b.configSave(); },
                     configReload: function() { return b.configReload(); },
-                    storageGet: function(key, def) { return b.storageGet(key, def || ''); },
-                    storageSet: function(key, val) { return b.storageSet(key, val); },
+                    storageGet: function(key, def) { return String(b.storageGet(key, def === undefined || def === null ? '' : String(def))); },
+                    storageSet: function(key, val) { return b.storageSet(key, val === undefined || val === null ? '' : String(val)); },
                     storageRemove: function(key) { return b.storageRemove(key); },
-                    base64Decode: function(str) { return b.base64Decode(str); },
-                    base64Encode: function(data) { return b.base64Encode(data); },
-                    pcmToWav: function(b64, sr) { return b.pcmToWav(b64, sr || 24000); },
-                    aiChat: function(system, user, role) { return b.aiChat(system || '', user || '', role || null); },
-                    aiChatJSON: function(messages, role) { return b.aiChatJSON(messages || '[]', role || null); },
+                    base64Decode: function(str) { return String(b.base64Decode(str || '')); },
+                    base64Encode: function(data) { return String(b.base64Encode(data || '')); },
+                    pcmToWav: function(b64, sr) { return String(b.pcmToWav(b64 || '', sr || 24000)); },
+                    aiChat: function(system, user, role) { return String(b.aiChat(system || '', user || '', role || null)); },
+                    aiChatJSON: function(messages, role) { return String(b.aiChatJSON(messages || '[]', role || null)); },
                     aiGenerateImage: function(prompt, count, size) { return b.aiGenerateImage(prompt || '', count || 1, size || null); },
                     aiGenerateImages: function(prompt, count, size) { return b.aiGenerateImages(prompt || '', count || 1, size || null); },
-                    getModuleDir: function() { return b.moduleDirPath(); },
-                    getAppVersion: function() { return b.getAppVersion(); },
+                    getModuleDir: function() { return String(b.moduleDirPath()); },
+                    getAppVersion: function() { return String(b.getAppVersion()); },
                     reload: function() { return b.reload(); }
                 };
             })();

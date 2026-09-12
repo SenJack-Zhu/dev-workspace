@@ -1,6 +1,7 @@
 package com.mozhi.reader.modules
 
 import android.content.Context
+import android.content.res.AssetManager
 import javax.inject.Inject
 import javax.inject.Singleton
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -41,6 +42,12 @@ class ModuleLoader @Inject constructor(
     /**
      * Copy built-in modules from assets to internal storage.
      * Runs on every loadAll() call so deleted built-in modules are restored.
+     *
+     * Uses version comparison instead of a bare existence check: an existing
+     * file is only kept when the on-disk version is >= the bundled version.
+     * This lets a newly installed APK ship updated built-in modules to devices
+     * that already have an older copy, while still respecting a local version
+     * that is newer than the bundled one.
      */
     private fun restoreBuiltInModules() {
         val assetMgr = context.assets
@@ -51,17 +58,36 @@ class ModuleLoader @Inject constructor(
             try {
                 val assetPath = "modules/$pkgName"
                 val files = assetMgr.list(assetPath) ?: continue
+
+                // Compare manifest versions first so we know whether to overwrite.
+                val assetVersion = readAssetVersion(assetMgr, assetPath)
+                val diskVersion = readDiskVersion(File(targetDir, "manifest.json"))
+                val shouldOverwriteExisting = compareVersions(assetVersion, diskVersion) > 0
+
                 for (fileName in files) {
                     val targetFile = File(targetDir, fileName)
-                    // Skip if file already exists (preserve user modifications)
-                    if (targetFile.exists()) continue
+                    if (targetFile.exists()) {
+                        // Keep user's file unless the bundled version is strictly newer.
+                        if (!shouldOverwriteExisting) {
+                            if (fileName == "manifest.json") {
+                                hookRegistry.log(
+                                    "[ModuleLoader] Keep $pkgName v$diskVersion " +
+                                        "(bundled v$assetVersion, not newer)"
+                                )
+                            }
+                            continue
+                        }
+                    }
                     try {
                         assetMgr.open("$assetPath/$fileName").use { input ->
                             targetFile.outputStream().use { output ->
                                 input.copyTo(output)
                             }
                         }
-                        hookRegistry.log("[ModuleLoader] Restored built-in: $pkgName/$fileName")
+                        hookRegistry.log(
+                            "[ModuleLoader] Restored built-in: $pkgName/$fileName " +
+                                "(v$diskVersion -> v$assetVersion)"
+                        )
                     } catch (e: Exception) {
                         hookRegistry.log("[ModuleLoader] Failed to restore $pkgName/$fileName: ${e.message}")
                     }
@@ -70,6 +96,50 @@ class ModuleLoader @Inject constructor(
                 hookRegistry.log("[ModuleLoader] Built-in module $pkgName not found in assets: ${e.message}")
             }
         }
+    }
+
+    /** Read the `version` field from a manifest.json inside assets ("" if absent). */
+    private fun readAssetVersion(assetMgr: AssetManager, assetPath: String): String {
+        return try {
+            val text = assetMgr.open("$assetPath/manifest.json").use { input ->
+                input.bufferedReader().readText()
+            }
+            JSONObject(text).optString("version", "")
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
+    /** Read the `version` field from a manifest.json on disk ("" if absent). */
+    private fun readDiskVersion(manifest: File): String {
+        return try {
+            if (!manifest.exists()) "" else JSONObject(manifest.readText()).optString("version", "")
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
+    /**
+     * Compare dotted numeric versions ("1.2.0" vs "1.1.0").
+     * Returns >0 if [a] is newer than [b], <0 if older, 0 if equal.
+     * Non-numeric segments compare lexicographically; an absent version
+     * ("") is treated as older than any present version.
+     */
+    private fun compareVersions(a: String, b: String): Int {
+        if (a == b) return 0
+        if (a.isBlank()) return -1
+        if (b.isBlank()) return 1
+        val pa = a.split('.')
+        val pb = b.split('.')
+        for (i in 0 until maxOf(pa.size, pb.size)) {
+            val sa = pa.getOrNull(i) ?: "0"
+            val sb = pb.getOrNull(i) ?: "0"
+            val na = sa.toIntOrNull()
+            val nb = sb.toIntOrNull()
+            val cmp = if (na != null && nb != null) na.compareTo(nb) else sa.compareTo(sb)
+            if (cmp != 0) return cmp
+        }
+        return 0
     }
 
     /**

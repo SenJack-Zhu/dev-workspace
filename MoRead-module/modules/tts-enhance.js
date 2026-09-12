@@ -14,16 +14,36 @@ var MODULE_NAME = "tts-enhance";
 // ------------------------------------------------------------
 // 工具函数
 // ------------------------------------------------------------
+
+/**
+ * 读取配置值（宽松版）。
+ * 兼容 Rhino 可能返回 Java String 的情况：显式转成 JS 字符串再比较，
+ * 避免 === 严格相等在宿主对象上失效导致开关永远被判为关闭。
+ */
+function readConfigRaw(key, def) {
+    var v;
+    try {
+        v = MoRead.configGet(key, def);
+    } catch (e) {
+        MoRead.log("[CustomTTS] 读取配置失败 " + key + ": " + e);
+        return def;
+    }
+    if (v === undefined || v === null) return def;
+    return String(v);
+}
+
 function isEnabled(key) {
-    return MoRead.configGet(key, "false") === "true";
+    var raw = readConfigRaw(key, "false");
+    var v = raw.toLowerCase().replace(/^\s+|\s+$/g, "");
+    return v === "true" || v === "1" || v === "yes" || v === "on";
 }
 
 function getConfig(key, def) {
-    return MoRead.configGet(key, def);
+    return readConfigRaw(key, def);
 }
 
 function getConfigInt(key, def) {
-    var v = parseInt(MoRead.configGet(key, String(def)), 10);
+    var v = parseInt(readConfigRaw(key, String(def)), 10);
     return isNaN(v) ? def : v;
 }
 
@@ -646,6 +666,12 @@ if (isEnabled("enableCustomVoices")) activeHooks.push("tts.voices");
 if (isEnabled("enableCustomSegmenter")) activeHooks.push("listen.sentence");
 
 MoRead.log("TTS 增强模块 v1.2.0 加载完成");
+// 诊断：把每个开关读到的原始值打进日志，便于在 App 日志面板直接定位配置问题。
+MoRead.log("[诊断] enableCustomTTS=" + readConfigRaw("enableCustomTTS", "(未设置)")
+    + " enableCustomVoices=" + readConfigRaw("enableCustomVoices", "(未设置)")
+    + " enableCustomSegmenter=" + readConfigRaw("enableCustomSegmenter", "(未设置)")
+    + " ttsMode=" + readConfigRaw("ttsMode", "(未设置)")
+    + " ttsEndpoint=" + readConfigRaw("ttsEndpoint", "(未设置)"));
 if (activeHooks.length > 0) {
     MoRead.log("已激活 hook: " + activeHooks.join(", "));
 } else {

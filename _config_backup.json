@@ -1,0 +1,17 @@
+{
+  "ttsMode": "universal",
+  "enableCustomTTS": "true",
+  "enableDisplay": "false",
+  "ttsEndpoint": "http:\/\/127.0.0.1:8774",
+  "enableCustomVoices": "true",
+  "voicesSource": "static",
+  "dynamicVoicesUrl": "http:\/\/127.0.0.1:8774\/voices",
+  "dynamicVoiceIdField": "id",
+  "dynamicVoiceNameField": "name",
+  "enableCustomSegmenter": "true",
+  "universalUrlTemplate": "http:\/\/localhost:8774\/forward?text={{text}}&voice={{voice}}&speed={{speed}}&volume={{volume}}&pitch={{pitch}}",
+  "aiMode": "full",
+  "tts-enhance:voicesSource": "dynamic",
+  "tts-enhance:universalUrlTemplate": "http:\/\/localhost:8774\/forward?text={{text}}&voice={{voice}}",
+  "tts-enhance:enableCustomTTS": "true"
+}
